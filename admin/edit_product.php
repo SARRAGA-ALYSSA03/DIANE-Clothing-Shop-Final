@@ -34,7 +34,7 @@ if (empty($_SESSION['csrf_token'])) {
 // 5. Retrieve product
 $productResult = supabaseRequest(
     '/rest/v1/products?id=eq.' . rawurlencode($productId) .
-    '&select=id,name,price,original_price,category,gender,image,sizes,colors,material,description,stock,is_new,is_featured',
+    '&select=id,name,price,original_price,category,gender,image,tryon_image,sizes,colors,material,description,stock,is_new,is_featured',
     'GET',
     null,
     $_SESSION['access_token']
@@ -78,6 +78,7 @@ $values = [
     'category' => $product['category'] ?? '',
     'gender' => $product['gender'] ?? 'women',
     'image' => $product['image'] ?? '',
+    'tryon_image' => $product['tryon_image'] ?? '',
     'sizes' => implode(', ', $product['sizes'] ?? []),
     'colors' => implode(', ', $product['colors'] ?? []),
     'material' => $product['material'] ?? '',
@@ -161,6 +162,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $product) {
 
     } else {
 
+        // Keep the existing Try-On image unless a new one is uploaded or removal is requested.
+        $tryOnImageUrl = trim((string)($product['tryon_image'] ?? ''));
+
+        if (isset($_POST['remove_tryon_image']) && $_POST['remove_tryon_image'] === '1') {
+            $tryOnImageUrl = '';
+        }
+
+        if (
+            isset($_FILES['tryon_image_file']) &&
+            $_FILES['tryon_image_file']['error'] !== UPLOAD_ERR_NO_FILE
+        ) {
+            $tryOnUpload = supabaseUploadProductImage(
+                $_FILES['tryon_image_file'],
+                $_SESSION['access_token']
+            );
+
+            if (empty($tryOnUpload['success']) || empty($tryOnUpload['url'])) {
+                $error = $tryOnUpload['message'] ?? 'Unable to upload the Try-On overlay image. Please use a JPG, PNG, or WEBP image up to 5 MB.';
+            } else {
+                $tryOnImageUrl = $tryOnUpload['url'];
+            }
+        }
+
         // Prepare updated product information
         $updatedProduct = [
             'name' => $values['name'],
@@ -170,6 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $product) {
             'gender' => $values['gender'],
             'image' => $values['image'],
             'images' => [$values['image']],
+            'tryon_image' => $tryOnImageUrl,
             'sizes' => $sizes,
             'colors' => $colors,
             'material' => $values['material'],
@@ -179,15 +204,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $product) {
             'is_featured' => isset($_POST['is_featured'])
         ];
 
-        // Update existing product, keeping its ID
-        $updateResult = supabaseRequest(
-            '/rest/v1/products?id=eq.' . rawurlencode($productId),
-            'PATCH',
-            $updatedProduct,
-            $_SESSION['access_token']
-        );
+        if ($error === '') {
+            // Update existing product, keeping its ID
+            $updateResult = supabaseRequest(
+                '/rest/v1/products?id=eq.' . rawurlencode($productId),
+                'PATCH',
+                $updatedProduct,
+                $_SESSION['access_token']
+            );
+        } else {
+            $updateResult = ['success' => false];
+        }
 
-        if (!empty($updateResult['success'])) {
+        if ($error === '' && !empty($updateResult['success'])) {
 
             // Record a stock adjustment only when the quantity actually changed.
             $previousStock = (int)($product['stock'] ?? 0);
@@ -243,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $product) {
                 exit;
             }
 
-        } else {
+        } elseif ($error === '') {
 
             $error = 'Unable to update product. Please check your database permissions and information.';
         }
@@ -589,7 +618,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $product) {
 
             <div class="form-content">
 
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
 
                     <input
                         type="hidden"
@@ -758,10 +787,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $product) {
 
                     </section>
 
+                    <!-- Virtual Try-On overlay -->
+                    <section class="form-section">
+
+                        <h3>03 / Virtual Try-On Overlay</h3>
+
+                        <div class="form-group full">
+                            <label for="tryOnImageFile">Try-On Overlay Image (Optional)</label>
+
+                            <?php if (!empty($values['tryon_image'])): ?>
+                                <img
+                                    id="tryOnImagePreview"
+                                    class="image-preview"
+                                    src="<?= htmlspecialchars($values['tryon_image'], ENT_QUOTES, 'UTF-8') ?>"
+                                    alt="Current Try-On overlay image"
+                                    style="object-fit: contain; background: #f7f7f7;"
+                                >
+                                <small class="hint">A Try-On overlay is currently saved for this product.</small>
+                            <?php else: ?>
+                                <img
+                                    id="tryOnImagePreview"
+                                    class="image-preview"
+                                    src=""
+                                    alt="Try-On overlay preview"
+                                    style="display: none; object-fit: contain; background: #f7f7f7;"
+                                >
+                                <small class="hint">No Try-On overlay is currently saved for this product.</small>
+                            <?php endif; ?>
+
+                            <input
+                                type="file"
+                                name="tryon_image_file"
+                                id="tryOnImageFile"
+                                accept="image/png,image/jpeg,image/webp"
+                            >
+
+                            <small class="hint">
+                                Upload a clothing-only image with a transparent background (PNG recommended). JPG, PNG, or WEBP up to 5 MB.
+                                Leave this blank to keep the current overlay.
+                            </small>
+
+                            <?php if (!empty($values['tryon_image'])): ?>
+                                <label class="checkbox-label" style="margin-top: 12px;">
+                                    <input type="checkbox" name="remove_tryon_image" value="1">
+                                    Remove current Try-On overlay
+                                </label>
+                            <?php endif; ?>
+                        </div>
+
+                    </section>
+
                     <!-- Product variants -->
                     <section class="form-section">
 
-                        <h3>03 / Product Variants</h3>
+                        <h3>04 / Product Variants</h3>
 
                         <div class="form-grid">
 
@@ -856,7 +935,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $product) {
                     <!-- Description and display -->
                     <section class="form-section">
 
-                        <h3>04 / Description & Display</h3>
+                        <h3>05 / Description & Display</h3>
 
                         <div class="form-group">
 
@@ -963,6 +1042,35 @@ if (imageInput && imagePreview) {
     imagePreview.onerror = function () {
         imagePreview.style.display = 'none';
     };
+}
+
+const tryOnImageInput = document.getElementById('tryOnImageFile');
+const tryOnImagePreview = document.getElementById('tryOnImagePreview');
+
+if (tryOnImageInput && tryOnImagePreview) {
+    tryOnImageInput.addEventListener('change', function () {
+        const file = tryOnImageInput.files && tryOnImageInput.files[0];
+
+        if (!file) {
+            return;
+        }
+
+        const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Please choose a JPG, PNG, or WEBP image.');
+            tryOnImageInput.value = '';
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            alert('The image must not exceed 5 MB.');
+            tryOnImageInput.value = '';
+            return;
+        }
+
+        tryOnImagePreview.src = URL.createObjectURL(file);
+        tryOnImagePreview.style.display = 'block';
+    });
 }
 </script>
 

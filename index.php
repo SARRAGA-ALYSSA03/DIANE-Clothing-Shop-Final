@@ -178,8 +178,25 @@ $visibleProducts = array_values(
         }
     )
 );
-// Featured hero product.
+// Featured hero product and image carousel slides.
+// Prefer products explicitly marked as featured; otherwise use the newest products.
 $heroProduct = $products[0] ?? null;
+$heroSlides = array_values(array_filter(
+    $products,
+    function ($product) {
+        return !empty($product['image']);
+    }
+));
+$featuredSlides = array_values(array_filter(
+    $heroSlides,
+    function ($product) {
+        return !empty($product['is_featured']);
+    }
+));
+if (count($featuredSlides) > 1) {
+    $heroSlides = $featuredSlides;
+}
+$heroSlides = array_slice($heroSlides, 0, 5);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -444,6 +461,92 @@ $heroProduct = $products[0] ?? null;
             font-size: 9px;
             font-weight: 600;
             letter-spacing: 1px;
+        }
+        /* HERO PRODUCT IMAGE CAROUSEL */
+        .diane-hero-slides {
+            position: absolute;
+            inset: 0;
+        }
+        .diane-hero-slide {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity .65s ease, visibility .65s ease;
+        }
+        .diane-hero-slide.is-active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .diane-hero-slide img {
+            display: block;
+        }
+        .diane-hero-carousel-controls {
+            position: absolute;
+            left: 25px;
+            bottom: 22px;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+        .diane-hero-arrow {
+            width: 34px;
+            height: 34px;
+            border: 1px solid rgba(17,17,17,.25);
+            border-radius: 50%;
+            background: rgba(255,255,255,.9);
+            color: #111111;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background .2s ease, color .2s ease;
+        }
+        .diane-hero-arrow:hover {
+            background: #111111;
+            color: #ffffff;
+        }
+        .diane-hero-dots {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+        .diane-hero-dot {
+            width: 6px;
+            height: 6px;
+            padding: 0;
+            border: 0;
+            border-radius: 50%;
+            background: rgba(17,17,17,.35);
+            cursor: pointer;
+        }
+        .diane-hero-dot.is-active {
+            width: 18px;
+            border-radius: 10px;
+            background: #111111;
+        }
+        .diane-hero-arrow:focus-visible,
+        .diane-hero-dot:focus-visible {
+            outline: 2px solid #111111;
+            outline-offset: 4px;
+        }
+        @media (max-width: 600px) {
+            .diane-hero-carousel-controls {
+                left: 14px;
+                bottom: 14px;
+                gap: 9px;
+            }
+            .diane-hero-image-label {
+                right: 14px;
+                bottom: 14px;
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .diane-hero-slide {
+                transition: none;
+            }
         }
         /* =========================================
            04. EDITORIAL INTRO
@@ -1344,19 +1447,27 @@ $heroProduct = $products[0] ?? null;
             DISCOVER YOUR STYLE
         </a>
     </div>
-    <div class="diane-hero-image">
-        <?php if (
-            is_array($heroProduct) &&
-            !empty($heroProduct['image'])
-        ): ?>
-            <img
-                src="<?= htmlspecialchars(
-                    $heroProduct['image'],
-                    ENT_QUOTES,
-                    'UTF-8'
-                ) ?>"
-                alt="Diane Clothing Shop featured collection"
-            >
+    <div
+        class="diane-hero-image<?= count($heroSlides) > 1 ? ' has-carousel' : '' ?>"
+        id="diane-hero-carousel"
+        aria-label="Featured DIANE products"
+    >
+        <?php if (!empty($heroSlides)): ?>
+            <div class="diane-hero-slides" aria-live="off">
+                <?php foreach ($heroSlides as $slideIndex => $slide): ?>
+                    <div
+                        class="diane-hero-slide<?= $slideIndex === 0 ? ' is-active' : '' ?>"
+                        data-slide="<?= (int)$slideIndex ?>"
+                        aria-hidden="<?= $slideIndex === 0 ? 'false' : 'true' ?>"
+                    >
+                        <img
+                            src="<?= htmlspecialchars($slide['image'], ENT_QUOTES, 'UTF-8') ?>"
+                            alt="<?= htmlspecialchars($slide['name'], ENT_QUOTES, 'UTF-8') ?>"
+                            <?= $slideIndex === 0 ? 'fetchpriority="high"' : 'loading="lazy"' ?>
+                        >
+                    </div>
+                <?php endforeach; ?>
+            </div>
         <?php else: ?>
             <span class="diane-hero-image-placeholder">
                 DIANE / NEW COLLECTION
@@ -1365,6 +1476,27 @@ $heroProduct = $products[0] ?? null;
         <span class="diane-hero-image-label">
             THE NEW EDIT
         </span>
+        <?php if (count($heroSlides) > 1): ?>
+            <div class="diane-hero-carousel-controls" aria-label="Featured product carousel controls">
+                <button type="button" class="diane-hero-arrow" data-carousel-prev aria-label="Previous featured product">
+                    &#8592;
+                </button>
+                <div class="diane-hero-dots" role="group" aria-label="Choose featured product">
+                    <?php foreach ($heroSlides as $slideIndex => $slide): ?>
+                        <button
+                            type="button"
+                            class="diane-hero-dot<?= $slideIndex === 0 ? ' is-active' : '' ?>"
+                            data-carousel-go="<?= (int)$slideIndex ?>"
+                            aria-label="Show featured product <?= (int)($slideIndex + 1) ?>"
+                            aria-current="<?= $slideIndex === 0 ? 'true' : 'false' ?>"
+                        ></button>
+                    <?php endforeach; ?>
+                </div>
+                <button type="button" class="diane-hero-arrow" data-carousel-next aria-label="Next featured product">
+                    &#8594;
+                </button>
+            </div>
+        <?php endif; ?>
     </div>
 </section>
 <!-- =========================================
@@ -1940,5 +2072,88 @@ $heroProduct = $products[0] ?? null;
         </span>
     </div>
 </footer>
+
+<script>
+(function () {
+    const carousel = document.getElementById('diane-hero-carousel');
+    if (!carousel) return;
+
+    const slides = Array.from(carousel.querySelectorAll('.diane-hero-slide'));
+    const dots = Array.from(carousel.querySelectorAll('.diane-hero-dot'));
+    const previous = carousel.querySelector('[data-carousel-prev]');
+    const next = carousel.querySelector('[data-carousel-next]');
+    if (slides.length < 2) return;
+
+    let activeIndex = 0;
+    let autoplayId = null;
+    let isPointerOverCarousel = false;
+    let isCarouselFocused = false;
+    // Hover autoplay is intentionally enabled for this carousel.
+
+    function showSlide(index) {
+        activeIndex = (index + slides.length) % slides.length;
+        slides.forEach((slide, i) => {
+            const active = i === activeIndex;
+            slide.classList.toggle('is-active', active);
+            slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+        });
+        dots.forEach((dot, i) => {
+            const active = i === activeIndex;
+            dot.classList.toggle('is-active', active);
+            dot.setAttribute('aria-current', active ? 'true' : 'false');
+        });
+    }
+
+    function stopAutoplay() {
+        if (autoplayId !== null) {
+            window.clearInterval(autoplayId);
+            autoplayId = null;
+        }
+    }
+
+    function startAutoplay() {
+        stopAutoplay();
+        if (!document.hidden) {
+            autoplayId = window.setInterval(() => showSlide(activeIndex + 1), 2000);
+        }
+    }
+
+    if (previous) previous.addEventListener('click', () => { showSlide(activeIndex - 1); startAutoplay(); });
+    if (next) next.addEventListener('click', () => { showSlide(activeIndex + 1); startAutoplay(); });
+    dots.forEach((dot, i) => dot.addEventListener('click', () => { showSlide(i); startAutoplay(); }));
+
+    // Start rotating only while the pointer is over the product image/carousel.
+    // Stop when the pointer leaves, so the hero stays still when not being viewed.
+    carousel.addEventListener('pointerenter', () => {
+        isPointerOverCarousel = true;
+        startAutoplay();
+    });
+    carousel.addEventListener('pointerleave', () => {
+        isPointerOverCarousel = false;
+        stopAutoplay();
+    });
+
+    // Keyboard users get the same behavior when focusing carousel controls.
+    carousel.addEventListener('focusin', () => {
+        isCarouselFocused = true;
+        startAutoplay();
+    });
+    carousel.addEventListener('focusout', (event) => {
+        if (!carousel.contains(event.relatedTarget)) {
+            isCarouselFocused = false;
+            stopAutoplay();
+        }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopAutoplay();
+        } else if (isPointerOverCarousel || isCarouselFocused) {
+            startAutoplay();
+        }
+    });
+})();
+</script>
+
 </body>
 </html>

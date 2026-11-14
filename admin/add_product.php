@@ -274,61 +274,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $messageType = 'error';
 
     } else {
+        // Optional Virtual Try-On overlay upload.
+        $tryOnImageUrl = null;
+        $tryOnFile = $_FILES['tryon_image_file'] ?? null;
+        $tryOnUploadError = $tryOnFile['error'] ?? UPLOAD_ERR_NO_FILE;
 
-        // 8. Upload the selected image directly to Supabase Storage.
-        $imageUpload = supabaseUploadProductImage(
-            $uploadedFile,
-            $_SESSION['access_token']
-        );
+        if ($tryOnUploadError !== UPLOAD_ERR_NO_FILE) {
+            if ($tryOnUploadError !== UPLOAD_ERR_OK) {
+                $message = 'The Try-On image could not be uploaded. Please choose it again.';
+                $messageType = 'error';
+            } else {
+                $tryOnUpload = supabaseUploadProductImage(
+                    $tryOnFile,
+                    $_SESSION['access_token']
+                );
 
-        if (empty($imageUpload['success']) || empty($imageUpload['url'])) {
+                if (empty($tryOnUpload['success']) || empty($tryOnUpload['url'])) {
+                    $message = $tryOnUpload['error']
+                        ?? 'Unable to upload the Try-On image. Please try again.';
+                    $messageType = 'error';
+                } else {
+                    $tryOnImageUrl = $tryOnUpload['url'];
+                }
+            }
+        }
 
-            $message = $imageUpload['error']
-                ?? 'Unable to upload the product image. Please try again.';
-            $messageType = 'error';
-
-        } else {
-
-            $imageUrl = $imageUpload['url'];
-
-            // 9. Prepare product data using the public Storage URL.
-            $product = [
-                'id' => 'prod_' . bin2hex(random_bytes(8)),
-                'name' => $values['name'],
-                'price' => $price,
-                'original_price' => $originalPrice,
-                'category' => $values['category'],
-                'gender' => $values['gender'],
-                'image' => $imageUrl,
-                'images' => [$imageUrl],
-                'sizes' => $sizes,
-                'colors' => $colors,
-                'material' => $values['material'],
-                'description' => $values['description'],
-                'stock' => $stock,
-                'rating' => 0,
-                'review_count' => 0,
-                'is_new' => isset($_POST['is_new']),
-                'is_featured' => isset($_POST['is_featured'])
-            ];
-
-            // 10. Insert the product into Supabase.
-            $insertResult = supabaseRequest(
-                '/rest/v1/products',
-                'POST',
-                $product,
+        // Upload the required catalog image only when the optional overlay is valid.
+        if ($message === '') {
+            $imageUpload = supabaseUploadProductImage(
+                $uploadedFile,
                 $_SESSION['access_token']
             );
 
-            if ($insertResult['success']) {
-                header('Location: add_product.php?success=1');
-                exit;
-            }
+            if (empty($imageUpload['success']) || empty($imageUpload['url'])) {
+                $message = $imageUpload['error']
+                    ?? 'Unable to upload the product image. Please try again.';
+                $messageType = 'error';
+            } else {
+                $imageUrl = $imageUpload['url'];
 
-            // The file upload succeeded, but the product insert failed.
-            // Keep the returned error generic; do not expose tokens or secrets.
-            $message = 'The image uploaded, but the product could not be saved. Please check the products table permissions and try again.';
-            $messageType = 'error';
+                $product = [
+                    'id' => 'prod_' . bin2hex(random_bytes(8)),
+                    'name' => $values['name'],
+                    'price' => $price,
+                    'original_price' => $originalPrice,
+                    'category' => $values['category'],
+                    'gender' => $values['gender'],
+                    'image' => $imageUrl,
+                    'images' => [$imageUrl],
+                    'tryon_image' => $tryOnImageUrl,
+                    'sizes' => $sizes,
+                    'colors' => $colors,
+                    'material' => $values['material'],
+                    'description' => $values['description'],
+                    'stock' => $stock,
+                    'rating' => 0,
+                    'review_count' => 0,
+                    'is_new' => isset($_POST['is_new']),
+                    'is_featured' => isset($_POST['is_featured'])
+                ];
+
+                $insertResult = supabaseRequest(
+                    '/rest/v1/products',
+                    'POST',
+                    $product,
+                    $_SESSION['access_token']
+                );
+
+                if ($insertResult['success']) {
+                    header('Location: add_product.php?success=1');
+                    exit;
+                }
+
+                $message = 'The images uploaded, but the product could not be saved. Please check the products table permissions and try again.';
+                $messageType = 'error';
+            }
         }
     }
 }
@@ -654,6 +674,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
 
+
+        .overlay-preview {
+            width: 115px;
+            height: 140px;
+            margin-top: 13px;
+            padding: 6px;
+            object-fit: contain;
+            background: #f4f4f2;
+            border: 1px solid #eee;
+            display: none;
+        }
 
         .checkbox-row {
 
@@ -1236,7 +1267,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         </div>
 
-                    </section>
+                    
+                            <div style="margin-top: 25px;">
+                                <label for="tryOnImageFile">
+                                    Virtual Try-On Overlay Image <span style="color:#888; font-weight:normal;">(Optional)</span>
+                                </label>
+                                <input
+                                    type="file"
+                                    name="tryon_image_file"
+                                    id="tryOnImageFile"
+                                    accept="image/png,image/jpeg,image/webp"
+                                >
+                                <small class="hint">
+                                    Upload a clothing-only image with a transparent background (PNG recommended).
+                                    JPG, PNG, or WEBP up to 5 MB.
+                                </small>
+                                <img
+                                    id="tryOnImagePreview"
+                                    class="overlay-preview"
+                                    alt="Selected Virtual Try-On overlay preview"
+                                >
+                            </div>
+
+                        </section>
 
                     <!-- Variants -->
 
@@ -1539,20 +1592,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <script>
 const imageInput = document.getElementById('imageFile');
 const imagePreview = document.getElementById('imagePreview');
+const tryOnImageInput = document.getElementById('tryOnImageFile');
+const tryOnImagePreview = document.getElementById('tryOnImagePreview');
 
 let previewUrl = null;
+let tryOnPreviewUrl = null;
 
-imageInput.addEventListener('change', function () {
-    const file = imageInput.files[0];
+function previewSelectedImage(input, preview, isOverlay = false) {
+    const file = input.files[0];
+    const currentUrl = isOverlay ? tryOnPreviewUrl : previewUrl;
 
-    if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        previewUrl = null;
+    if (currentUrl) {
+        URL.revokeObjectURL(currentUrl);
+        if (isOverlay) tryOnPreviewUrl = null;
+        else previewUrl = null;
     }
 
     if (!file) {
-        imagePreview.style.display = 'none';
-        imagePreview.removeAttribute('src');
+        preview.style.display = 'none';
+        preview.removeAttribute('src');
         return;
     }
 
@@ -1560,32 +1618,41 @@ imageInput.addEventListener('change', function () {
     const maxSize = 5 * 1024 * 1024;
 
     if (!allowedTypes.includes(file.type)) {
-        imageInput.value = '';
-        imagePreview.style.display = 'none';
+        input.value = '';
+        preview.style.display = 'none';
         alert('Please select a PNG, JPG, or WEBP image.');
         return;
     }
 
     if (file.size > maxSize) {
-        imageInput.value = '';
-        imagePreview.style.display = 'none';
+        input.value = '';
+        preview.style.display = 'none';
         alert('The image must not exceed 5 MB.');
         return;
     }
 
-    previewUrl = URL.createObjectURL(file);
-    imagePreview.src = previewUrl;
-    imagePreview.style.display = 'block';
+    const newUrl = URL.createObjectURL(file);
+    if (isOverlay) tryOnPreviewUrl = newUrl;
+    else previewUrl = newUrl;
 
-    imagePreview.onerror = function () {
-        imagePreview.style.display = 'none';
+    preview.src = newUrl;
+    preview.style.display = 'block';
+    preview.onerror = function () {
+        preview.style.display = 'none';
     };
+}
+
+imageInput.addEventListener('change', function () {
+    previewSelectedImage(imageInput, imagePreview, false);
+});
+
+tryOnImageInput.addEventListener('change', function () {
+    previewSelectedImage(tryOnImageInput, tryOnImagePreview, true);
 });
 
 window.addEventListener('beforeunload', function () {
-    if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-    }
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (tryOnPreviewUrl) URL.revokeObjectURL(tryOnPreviewUrl);
 });
 </script>
 
