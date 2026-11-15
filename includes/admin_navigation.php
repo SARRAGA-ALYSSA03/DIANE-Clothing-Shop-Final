@@ -11,7 +11,8 @@ function renderAdminNavigation(): void
         'orders.php' => ['Orders', '03'],
         'customers.php' => ['Customers', '04'],
         'users.php' => ['Users', '05'],
-        'reports.php' => ['Reports', '06'],
+        'riders.php' => ['Riders', '06'],
+        'reports.php' => ['Reports', '07'],
         'logout.php' => ['Logout', '→']
     ];
 ?>

@@ -4,7 +4,7 @@
 /**
  * DIANE CLOTHING SHOP
  * Admin Order Management
- * Order tracking: Processing, Confirmed, Shipped, Delivered, Cancelled.
+ * Order tracking: Processing, Confirmed, Shipped, Out for Delivery, Delivered, Cancelled.
  */
 
 date_default_timezone_set('Asia/Manila');
@@ -81,6 +81,7 @@ $allowedStatuses = [
     'Processing',
     'Confirmed',
     'Shipped',
+    'Out for Delivery',
     'Delivered',
     'Cancelled'
 ];
@@ -96,6 +97,21 @@ if (($_GET['updated'] ?? '') === '1') {
     $message = 'Order status and tracking information updated successfully.';
     $messageType = 'success';
 }
+
+// Load registered rider accounts for the assignment dropdown.
+$riderResult = supabaseRequest(
+    '/rest/v1/profiles?select=id,name,email&role=eq.rider&order=name.asc&limit=500',
+    'GET',
+    null,
+    $accessToken
+);
+$riders = (
+    !empty($riderResult['success']) &&
+    is_array($riderResult['data'] ?? null)
+) ? $riderResult['data'] : [];
+$riderLoadError = empty($riderResult['success'])
+    ? (string)($riderResult['error'] ?? 'Unable to load rider accounts.')
+    : '';
 
 // ==========================================
 // ==========================================
@@ -114,95 +130,130 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit('Invalid request. Please refresh the page and try again.');
     }
 
-    $orderId = (
-        isset($_POST['order_id']) &&
-        is_string($_POST['order_id'])
-    )
-        ? trim($_POST['order_id'])
-        : '';
+    $action = (string)($_POST['action'] ?? 'update_status');
+    $orderId = (isset($_POST['order_id']) && is_string($_POST['order_id']))
+        ? trim($_POST['order_id']) : '';
 
-    $newStatus = (
-        isset($_POST['status']) &&
-        is_string($_POST['status'])
-    )
-        ? trim($_POST['status'])
-        : '';
-
-    if (
-        $orderId === '' ||
-        !in_array($newStatus, $allowedStatuses, true)
-    ) {
-        $message = 'Invalid order information or status.';
+    if ($orderId === '') {
+        $message = 'Invalid order information.';
         $messageType = 'error';
 
-    } else {
+    } elseif ($action === 'assign_rider') {
 
-        // Use the database function for status transitions.
-        // It updates tracking timestamps and restores stock once
-        // when a newly stock-deducted order is cancelled.
-        $statusResult = supabaseRequest(
-            '/rest/v1/rpc/admin_update_order_status',
-            'POST',
-            [
-                'p_order_id' => $orderId,
-                'p_new_status' => $newStatus
-            ],
-            $accessToken
-        );
+        // An empty rider selection removes the current assignment.
+        $selectedRiderId = (isset($_POST['rider_id']) && is_string($_POST['rider_id']))
+            ? trim($_POST['rider_id']) : '';
 
-        $rpcData = $statusResult['data'] ?? null;
+        if ($riderLoadError !== '') {
+            $message = 'Rider accounts could not be loaded. ' . $riderLoadError;
+            $messageType = 'error';
+        } else {
+            // A rider can only be assigned after the admin confirms the order
+            // and has prepared it for hand-off. Processing orders stay unassigned.
+            $assignmentOrderResult = supabaseRequest(
+                '/rest/v1/orders?select=id,status,rider_id&id=eq.' . rawurlencode($orderId) . '&limit=1',
+                'GET',
+                null,
+                $accessToken
+            );
+            $assignmentOrder = (!empty($assignmentOrderResult['success']) && !empty($assignmentOrderResult['data'][0]))
+                ? $assignmentOrderResult['data'][0]
+                : null;
 
-        // PostgREST normally returns the JSONB object as an array.
-        // These guards also handle a JSON string or one-row array.
-        if (is_string($rpcData)) {
-            $decodedData = json_decode($rpcData, true);
-            if (is_array($decodedData)) {
-                $rpcData = $decodedData;
+            if (!$assignmentOrder) {
+                $message = 'The order could not be found. Please refresh and try again.';
+                $messageType = 'error';
+            } elseif (($assignmentOrder['status'] ?? '') !== 'Confirmed') {
+                $message = 'Please confirm and prepare this order before assigning a rider.';
+                $messageType = 'error';
+            } else {
+            $validRiderIds = array_map(
+                static function ($rider) { return (string)($rider['id'] ?? ''); },
+                $riders
+            );
+
+            if ($selectedRiderId !== '' && !in_array($selectedRiderId, $validRiderIds, true)) {
+                $message = 'Please select a valid registered rider.';
+                $messageType = 'error';
+            } else {
+                $assignmentResult = supabaseRequest(
+                    '/rest/v1/orders?id=eq.' . rawurlencode($orderId),
+                    'PATCH',
+                    ['rider_id' => ($selectedRiderId === '' ? null : $selectedRiderId)],
+                    $accessToken
+                );
+
+                if (!empty($assignmentResult['success'])) {
+                    header('Location: orders.php?rider_updated=1');
+                    exit;
+                }
+
+                $message = (string)($assignmentResult['error'] ?? 'Unable to assign this rider.');
+                $messageType = 'error';
+                error_log('DIANE rider assignment failed: ' . $message);
+            }
             }
         }
 
-        if (
-            is_array($rpcData) &&
-            isset($rpcData[0]) &&
-            is_array($rpcData[0])
-        ) {
-            $rpcData = $rpcData[0];
-        }
+    } else {
 
-        if (
-            !empty($statusResult['success']) &&
-            is_array($rpcData) &&
-            !empty($rpcData['success'])
-        ) {
-            header('Location: orders.php?updated=1');
-            exit;
+        $newStatus = (isset($_POST['status']) && is_string($_POST['status']))
+            ? trim($_POST['status']) : '';
 
+        if (!in_array($newStatus, $allowedStatuses, true)) {
+            $message = 'Invalid order status.';
+            $messageType = 'error';
         } else {
-            $rpcMessage = is_array($rpcData)
-                ? (string) ($rpcData['message'] ?? '')
-                : '';
+            // Keep the existing database function for status transitions,
+            // tracking timestamps, and stock restoration on cancellation.
+            $statusResult = supabaseRequest(
+                '/rest/v1/rpc/admin_update_order_status',
+                'POST',
+                [
+                    'p_order_id' => $orderId,
+                    'p_new_status' => $newStatus
+                ],
+                $accessToken
+            );
 
+            $rpcData = $statusResult['data'] ?? null;
+            if (is_string($rpcData)) {
+                $decodedData = json_decode($rpcData, true);
+                if (is_array($decodedData)) $rpcData = $decodedData;
+            }
+            if (is_array($rpcData) && isset($rpcData[0]) && is_array($rpcData[0])) {
+                $rpcData = $rpcData[0];
+            }
+
+            if (
+                !empty($statusResult['success']) &&
+                is_array($rpcData) &&
+                !empty($rpcData['success'])
+            ) {
+                header('Location: orders.php?updated=1');
+                exit;
+            }
+
+            $rpcMessage = is_array($rpcData) ? (string)($rpcData['message'] ?? '') : '';
             $message = $rpcMessage !== ''
                 ? $rpcMessage
-                : (string) (
-                    $statusResult['error'] ??
-                    'Unable to update the order. Please try again.'
-                );
-
+                : (string)($statusResult['error'] ?? 'Unable to update the order. Please try again.');
             $messageType = 'error';
-
-            error_log(
-                'DIANE admin order update failed: ' . $message
-            );
+            error_log('DIANE admin order update failed: ' . $message);
         }
     }
+}
+
+if (($_GET['rider_updated'] ?? '') === '1') {
+    $message = 'Rider assignment updated successfully.';
+    $messageType = 'success';
 }
 
 // 7. LOAD ALL ORDERS
 // ==========================================
 
 $result = supabaseRequest(
-    '/rest/v1/orders?select=id,user_id,full_name,total,status,payment_method,payment_status,created_at,confirmed_at,shipped_at,delivered_at,cancelled_at' .
+    '/rest/v1/orders?select=id,user_id,full_name,total,status,payment_method,payment_status,created_at,confirmed_at,shipped_at,delivered_at,cancelled_at,rider_id' .
     '&order=created_at.desc&limit=1000',
     'GET',
     null,
@@ -234,6 +285,7 @@ $statusCounts = [
     'Processing' => 0,
     'Confirmed' => 0,
     'Shipped' => 0,
+    'Out for Delivery' => 0,
     'Delivered' => 0,
     'Cancelled' => 0
 ];
@@ -268,6 +320,7 @@ function orderStatusClass($status): string
         'Processing' => 'processing',
         'Confirmed' => 'confirmed',
         'Shipped' => 'shipped',
+        'Out for Delivery' => 'out-for-delivery',
         'Delivered' => 'delivered',
         'Cancelled' => 'cancelled'
     ];
@@ -375,7 +428,7 @@ function orderStatusClass($status): string
 
         .status-grid {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
+            grid-template-columns: repeat(6, minmax(0, 1fr));
             gap: 12px;
             margin-bottom: 28px;
         }
@@ -532,6 +585,11 @@ function orderStatusClass($status): string
             color: #34537f;
         }
 
+        .status-badge.out-for-delivery {
+            background: #fff2df;
+            color: #8a5a16;
+        }
+
         .status-badge.delivered {
             background: #e5f1e8;
             color: #245c35;
@@ -597,6 +655,28 @@ function orderStatusClass($status): string
         .details-link:hover {
             background: #111;
             color: white;
+        }
+
+        .rider-form {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .rider-form select {
+            min-width: 150px;
+            max-width: 190px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            background: white;
+            font-size: 11px;
+        }
+
+        .rider-note {
+            display: block;
+            margin-top: 5px;
+            color: #888;
+            font-size: 10px;
         }
 
         /* =====================================
@@ -750,6 +830,12 @@ function orderStatusClass($status): string
 
     <?php endif; ?>
 
+    <?php if ($riderLoadError !== ''): ?>
+        <div class="notification error">
+            Rider assignment is unavailable: <?= orderEscape($riderLoadError) ?>
+        </div>
+    <?php endif; ?>
+
     <?php if ($error === ''): ?>
 
         <!-- ==================================
@@ -872,6 +958,7 @@ function orderStatusClass($status): string
                                 <th>Payment</th>
                                 <th>Status</th>
                                 <th>Update Status</th>
+                                <th>Assign Rider</th>
                                 <th>Details</th>
                             </tr>
 
@@ -1050,6 +1137,42 @@ function orderStatusClass($status): string
 
                                         </form>
 
+                                    </td>
+
+                                    <!-- ASSIGN RIDER -->
+
+                                    <td>
+                                        <?php if ($riderLoadError === ''): ?>
+                                            <?php $canAssignRider = ($status === 'Confirmed'); ?>
+                                            <form method="POST" action="orders.php" class="rider-form">
+                                                <input type="hidden" name="csrf_token" value="<?= orderEscape($csrfToken) ?>">
+                                                <input type="hidden" name="action" value="assign_rider">
+                                                <input type="hidden" name="order_id" value="<?= orderEscape($orderId) ?>">
+                                                <select name="rider_id" aria-label="Assign delivery rider" <?= $canAssignRider ? 'required' : 'disabled' ?>>
+                                                    <option value="">Unassigned</option>
+                                                    <?php foreach ($riders as $rider): ?>
+                                                        <?php $riderIdOption = (string)($rider['id'] ?? ''); ?>
+                                                        <option value="<?= orderEscape($riderIdOption) ?>" <?= (string)($order['rider_id'] ?? '') === $riderIdOption ? 'selected' : '' ?>>
+                                                            <?= orderEscape($rider['name'] ?? $rider['email'] ?? 'Rider') ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <?php if ($canAssignRider): ?>
+                                                    <button type="submit" class="update-button">SAVE</button>
+                                                <?php else: ?>
+                                                    <button type="button" class="update-button" disabled>LOCKED</button>
+                                                <?php endif; ?>
+                                            </form>
+                                            <?php if (!empty($order['rider_id'])): ?>
+                                                <small class="rider-note">Rider assigned</small>
+                                            <?php elseif ($canAssignRider): ?>
+                                                <small class="rider-note">Ready for rider assignment</small>
+                                            <?php else: ?>
+                                                <small class="rider-note">Confirm order to enable assignment</small>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <span class="rider-note">Unavailable</span>
+                                        <?php endif; ?>
                                     </td>
 
                                     <!-- ORDER DETAILS -->

@@ -704,9 +704,11 @@ if (
 
             } else {
 
-                // ==================================
+                // GCash and Maya use the DIANE demo-payment page.
+                // This is a school-project simulation, not a real wallet transaction.
 
-                // 8. PAYMENT STATUS
+                // ==================================
+                // 9. PAYMENT STATUS
 
                 // ==================================
 
@@ -834,14 +836,11 @@ if (
 
                 } else {
 
-                    header(
-
-                        'Location: checkout.php?success=1&order=' .
-
-                        rawurlencode($createdOrderId)
-
-                    );
-
+                    if (in_array($selectedPayment, ['GCash', 'Maya'], true)) {
+                        header('Location: demo_payment.php?order=' . rawurlencode($createdOrderId));
+                    } else {
+                        header('Location: checkout.php?success=1&order=' . rawurlencode($createdOrderId));
+                    }
                     exit;
 
                 }
@@ -1419,8 +1418,7 @@ foreach ($cartItems as $item) {
             line-height: 1.8;
 
         }
-
-        /* =====================================
+/* =====================================
 
            ORDER SUMMARY
 
@@ -2228,38 +2226,30 @@ foreach ($cartItems as $item) {
 
             <?php if (
 
-                in_array(
-
+                (in_array(
                     $orderDetails['payment_method'] ?? '',
-
                     ['GCash', 'Maya'],
-
                     true
-
-                )
+                ) && ($orderDetails['payment_status'] ?? '') === 'paid')
 
             ): ?>
 
                 <div class="notice">
 
-                    Your e-wallet payment method has been recorded
-
-                    as pending verification.
-
-                    No payment has been collected or verified by this website.
-
-                    Please follow the shop's confirmed payment instructions.
+                    Your DIANE demo payment is confirmed.
+                    This is a school-project simulation only; no real GCash or Maya money was collected.
 
                 </div>
 
-            <?php else: ?>
-
+            <?php elseif (($orderDetails['payment_method'] ?? '') === 'Cash on Delivery'): ?>
                 <div class="notice">
-
                     Please prepare payment when your order is delivered.
-
                 </div>
-
+            <?php else: ?>
+                <div class="notice">
+                    Your e-wallet demo payment has not been confirmed yet.
+                    Please return to the demo payment page to complete it.
+                </div>
             <?php endif; ?>
 
             <a
@@ -2707,8 +2697,7 @@ foreach ($cartItems as $item) {
                                 </label>
 
                             </div>
-
-                            <div class="payment-notice">
+<div class="payment-notice">
 
                                 <strong>
 
@@ -2718,13 +2707,9 @@ foreach ($cartItems as $item) {
 
                                 <br>
 
-                                Cash on Delivery will be recorded as unpaid until delivery.
-
-                                GCash and Maya will be recorded as pending verification.
-
-                                This website does not yet process e-wallet payments
-
-                                or verify transfers.
+                                Cash on Delivery is paid when your order is delivered.
+                                GCash and Maya will open DIANE's demo payment screen.
+                                This is a school-project simulation only; no real money is collected.
 
                             </div>
 
@@ -3003,7 +2988,6 @@ foreach ($cartItems as $item) {
     </div>
 
 </footer>
-
 </body>
 
 </html>

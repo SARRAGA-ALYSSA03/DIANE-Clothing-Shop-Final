@@ -177,6 +177,7 @@ function myOrdersStatusClass($status): string
         'processing' => 'processing',
         'confirmed' => 'confirmed',
         'shipped' => 'shipped',
+        'out for delivery' => 'out-for-delivery',
         'delivered' => 'delivered',
         'cancelled' => 'cancelled'
     ];
@@ -192,7 +193,7 @@ function myOrdersStatusClass($status): string
 // each customer sees only their own orders.
 
 $orderResult = supabaseRequest(
-    '/rest/v1/orders?select=id,user_id,full_name,phone,address,city,zip,total,status,payment_method,payment_status,created_at,confirmed_at,shipped_at,delivered_at,cancelled_at,customer_received_at' .
+    '/rest/v1/orders?select=id,user_id,full_name,phone,address,city,zip,total,status,payment_method,payment_status,created_at,confirmed_at,shipped_at,out_for_delivery_at,delivered_at,cancelled_at,customer_received_at' .
     '&user_id=eq.' . rawurlencode($userId) .
     '&order=created_at.desc',
     'GET',
@@ -771,6 +772,12 @@ if ($orderLoadError === '') {
             background: #eeeeee;
         }
 
+        .status-out-for-delivery {
+            border-color: #c58a35;
+            background: #fff6e9;
+            color: #80551b;
+        }
+
         .status-delivered {
             border-color: #111111;
             background: #111111;
@@ -800,7 +807,7 @@ if ($orderLoadError === '') {
 
         .tracking-timeline {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             position: relative;
         }
 
@@ -1596,6 +1603,11 @@ if ($orderLoadError === '') {
                         ],
 
                         [
+                            'label' => 'Out for Delivery',
+                            'date' => $order['out_for_delivery_at'] ?? null
+                        ],
+
+                        [
                             'label' => 'Delivered',
                             'date' => $order['delivered_at'] ?? null
                         ]
@@ -1606,7 +1618,8 @@ if ($orderLoadError === '') {
                         'Processing' => 0,
                         'Confirmed' => 1,
                         'Shipped' => 2,
-                        'Delivered' => 3
+                        'Out for Delivery' => 3,
+                        'Delivered' => 4
                     ];
 
                     $currentStep = $statusOrder[$orderStatus] ?? -1;

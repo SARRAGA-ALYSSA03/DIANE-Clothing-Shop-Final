@@ -95,6 +95,7 @@ if (empty($orderResult['success'])) {
     $error = 'The requested order could not be found.';
 }
 
+
 // ==========================================
 // 5. LOAD ORDER ITEMS
 // ==========================================
@@ -776,6 +777,7 @@ if ($order) {
 
         </section>
 
+
         <!-- ORDER STATUS AND TOTAL -->
 
         <section class="status-panel">
@@ -921,6 +923,29 @@ if ($order) {
             </div>
 
         </section>
+
+        <!-- E-WALLET DEMO PAYMENT INFORMATION -->
+        <?php if (in_array($paymentMethod, ['GCash', 'Maya'], true)): ?>
+            <section class="receipt-panel">
+                <h2>Demo Payment Information</h2>
+                <div class="receipt-state <?= ($order['payment_status'] ?? '') === 'paid' ? 'confirmed' : '' ?>">
+                    <div class="receipt-icon">
+                        <?= ($order['payment_status'] ?? '') === 'paid' ? '✓' : 'i' ?>
+                    </div>
+                    <div>
+                        <strong>
+                            <?= ($order['payment_status'] ?? '') === 'paid'
+                                ? 'DEMO PAYMENT CONFIRMED'
+                                : 'DEMO PAYMENT NOT CONFIRMED' ?>
+                        </strong>
+                        <p>
+                            This GCash/Maya payment is simulated for the school project.
+                            No real wallet transaction or money collection takes place.
+                        </p>
+                    </div>
+                </div>
+            </section>
+        <?php endif; ?>
 
         <!-- CUSTOMER RECEIPT CONFIRMATION -->
 

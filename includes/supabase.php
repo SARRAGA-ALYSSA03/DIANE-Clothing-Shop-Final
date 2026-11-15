@@ -11,6 +11,10 @@ $dotenv->safeLoad();
 define('SUPABASE_URL', rtrim($_ENV['SUPABASE_URL'] ?? '', '/'));
 define('SUPABASE_KEY', $_ENV['SUPABASE_KEY'] ?? '');
 
+// Server-side secret key for privileged Admin API operations only.
+// Never expose this key in browser JavaScript or public responses.
+define('SUPABASE_SECRET_KEY', $_ENV['SUPABASE_SECRET_KEY'] ?? '');
+
 if (SUPABASE_URL === '' || SUPABASE_KEY === '') {
     throw new RuntimeException(
         'Supabase configuration is missing. Please check your .env file.'

@@ -1094,6 +1094,113 @@ $heroSlides = array_slice($heroSlides, 0, 5);
             line-height: 1.7;
         }
         /* =========================================
+           TRY-ON METHOD SWITCH + AI PANEL
+        ========================================= */
+        .tryon-mode-switch {
+            max-width: 520px;
+            margin: 0 auto 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            border-bottom: 1px solid #d8d8d5;
+        }
+        .tryon-mode-button {
+            min-height: 48px;
+            padding: 12px 16px;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            background: transparent;
+            color: #777;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 1.2px;
+            cursor: pointer;
+        }
+        .tryon-mode-button.is-active {
+            border-bottom-color: #111;
+            color: #111;
+        }
+        .tryon-mode-panel[hidden] { display: none !important; }
+        .ai-tryon-layout {
+            max-width: 1180px;
+            margin: auto;
+            display: grid;
+            grid-template-columns: minmax(0, 1.45fr) minmax(300px, .75fr);
+            gap: 28px;
+            align-items: start;
+        }
+        .ai-tryon-preview {
+            position: relative;
+            width: 100%;
+            min-height: 480px;
+            aspect-ratio: 4 / 5;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #e9e9e7;
+        }
+        .ai-tryon-preview > img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        /* Keep the result image hidden until CLOAK returns a valid image. */
+        .ai-tryon-preview > img[hidden] {
+            display: none !important;
+        }
+        .ai-tryon-placeholder {
+            max-width: 390px;
+            padding: 30px;
+            text-align: center;
+            color: #555;
+        }
+        .ai-preview-symbol { font-size: 38px; }
+        .ai-tryon-placeholder h3 {
+            margin: 15px 0 8px;
+            color: #111;
+            font: normal 25px var(--diane-serif);
+        }
+        .ai-tryon-placeholder p, .ai-help-text, .ai-disclaimer {
+            color: #777;
+            font-size: 11px;
+            line-height: 1.7;
+        }
+        .ai-file-input {
+            width: 100%;
+            margin: 10px 0 4px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            background: #fff;
+            font-size: 11px;
+        }
+        .ai-tryon-controls > label { display: block; margin-top: 16px; }
+        .ai-tryon-controls select { margin-bottom: 8px; }
+        .ai-selected-product {
+            min-height: 36px;
+            margin: 5px 0 18px;
+            color: #777;
+            font-size: 10px;
+            line-height: 1.6;
+        }
+        .ai-generate-button { margin-top: 8px; }
+        #ai-tryon-status { color: #666; font-size: 11px; line-height: 1.6; }
+        .ai-download-link {
+            display: inline-block;
+            margin-top: 12px;
+            color: #111;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-underline-offset: 4px;
+        }
+        .ai-disclaimer { margin-top: 20px; }
+        @media (max-width: 800px) {
+            .ai-tryon-layout { grid-template-columns: 1fr; }
+            .ai-tryon-preview { min-height: 320px; aspect-ratio: 4 / 5; }
+        }
+
+        /* =========================================
            09. FOOTER
         ========================================= */
         .diane-footer {
@@ -1879,6 +1986,18 @@ $heroSlides = array_slice($heroSlides, 0, 5);
                 Virtual Try-On camera.
             </p>
         </div>
+        <div class="tryon-mode-switch" role="tablist" aria-label="Choose Try-On method">
+            <button type="button" class="tryon-mode-button is-active" id="manual-mode-button"
+                role="tab" aria-selected="true" aria-controls="manual-tryon-panel">
+                MANUAL TRY-ON
+            </button>
+            <button type="button" class="tryon-mode-button" id="ai-mode-button"
+                role="tab" aria-selected="false" aria-controls="ai-tryon-panel">
+                AI TRY-ON
+            </button>
+        </div>
+
+        <div id="manual-tryon-panel" class="tryon-mode-panel" role="tabpanel">
         <div class="tryon-layout">
             <!-- CAMERA PREVIEW -->
             <div class="camera-column">
@@ -1937,7 +2056,13 @@ $heroSlides = array_slice($heroSlides, 0, 5);
                                 ENT_QUOTES,
                                 'UTF-8'
                             ) ?>"
-                        >
+
+                            data-category="<?= htmlspecialchars(
+                                $product['category'],
+                                ENT_QUOTES,
+                                'UTF-8'
+                            ) ?>"
+                                                    >
                             <?= htmlspecialchars(
                                 $product['name'],
                                 ENT_QUOTES,
@@ -2037,6 +2162,49 @@ $heroSlides = array_slice($heroSlides, 0, 5);
                     Camera is off.
                 </p>
             </aside>
+        </div>
+        </div><!-- /manual-tryon-panel -->
+
+        <div id="ai-tryon-panel" class="tryon-mode-panel" role="tabpanel" hidden>
+            <div class="ai-tryon-layout">
+                <div class="ai-tryon-preview-column">
+                    <div class="ai-tryon-preview" id="ai-result-preview">
+                        <div class="ai-tryon-placeholder" id="ai-result-placeholder">
+                            <span class="ai-preview-symbol">✦</span>
+                            <h3>YOUR AI FITTING ROOM</h3>
+                            <p>Upload a full-body photo, choose a DIANE item, and generate your preview.</p>
+                        </div>
+                        <img id="ai-result-image" alt="Your AI Try-On result" hidden>
+                    </div>
+                    <p class="camera-caption">For best results, use a clear, front-facing full-body photo.</p>
+                </div>
+                <aside class="tryon-controls ai-tryon-controls">
+                    <h3>AI Try-On</h3>
+                    <label for="ai-person-photo">Upload your photo</label>
+                    <input id="ai-person-photo" type="file" accept="image/jpeg,image/png,image/webp" class="ai-file-input">
+                    <p class="ai-help-text">JPG, PNG, or WEBP. Maximum 12 MB.</p>
+
+                    <label for="ai-product-select">Choose a DIANE product</label>
+                    <select id="ai-product-select">
+                        <?php foreach ($products as $product): ?>
+                            <option
+                                value="<?= htmlspecialchars($product['id'], ENT_QUOTES, 'UTF-8') ?>"
+                                data-image="<?= htmlspecialchars($product['image'], ENT_QUOTES, 'UTF-8') ?>"
+                                data-category="<?= htmlspecialchars($product['category'], ENT_QUOTES, 'UTF-8') ?>"
+                            ><?= htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="ai-selected-product" id="ai-selected-product">
+                        <span>Selected product image will be used for the AI fitting.</span>
+                    </div>
+                    <button type="button" class="diane-primary-button ai-generate-button" id="ai-generate-button">
+                        GENERATE AI TRY-ON
+                    </button>
+                    <p id="ai-tryon-status" role="status" aria-live="polite">AI Try-On is ready when the CLOAK service is online.</p>
+                    <a id="ai-download-result" class="ai-download-link" href="#" download="diane-ai-tryon.png" hidden>DOWNLOAD RESULT</a>
+                    <p class="ai-disclaimer">AI-generated previews are visual estimates and may not reproduce every garment detail or fit exactly.</p>
+                </aside>
+            </div>
         </div>
     </section>
 </main>
@@ -2153,6 +2321,134 @@ $heroSlides = array_slice($heroSlides, 0, 5);
         }
     });
 })();
+
+/* DIANE Try-On mode selector and CLOAK AI integration */
+(function () {
+    const manualButton = document.getElementById('manual-mode-button');
+    const aiButton = document.getElementById('ai-mode-button');
+    const manualPanel = document.getElementById('manual-tryon-panel');
+    const aiPanel = document.getElementById('ai-tryon-panel');
+    if (!manualButton || !aiButton || !manualPanel || !aiPanel) return;
+
+    function setMode(mode) {
+        const isAI = mode === 'ai';
+        manualPanel.hidden = isAI;
+        aiPanel.hidden = !isAI;
+        manualButton.classList.toggle('is-active', !isAI);
+        aiButton.classList.toggle('is-active', isAI);
+        manualButton.setAttribute('aria-selected', String(!isAI));
+        aiButton.setAttribute('aria-selected', String(isAI));
+    }
+    manualButton.addEventListener('click', () => setMode('manual'));
+    aiButton.addEventListener('click', () => setMode('ai'));
+
+    const originalSelect = document.getElementById('product-select');
+    const aiSelect = document.getElementById('ai-product-select');
+    const photoInput = document.getElementById('ai-person-photo');
+    const generateButton = document.getElementById('ai-generate-button');
+    const status = document.getElementById('ai-tryon-status');
+    const resultImage = document.getElementById('ai-result-image');
+    const placeholder = document.getElementById('ai-result-placeholder');
+    const downloadLink = document.getElementById('ai-download-result');
+    const selectedProduct = document.getElementById('ai-selected-product');
+
+    if (!aiSelect || !photoInput || !generateButton || !status) return;
+
+    function syncProductSelect() {
+        if (originalSelect && aiSelect.options.length) {
+            const match = Array.from(aiSelect.options).find(o => o.value === originalSelect.value);
+            if (match) aiSelect.value = match.value;
+        }
+        const option = aiSelect.selectedOptions[0];
+        selectedProduct.textContent = option
+            ? 'Selected: ' + option.textContent.trim()
+            : 'No product is available.';
+    }
+    if (originalSelect) originalSelect.addEventListener('change', syncProductSelect);
+    aiSelect.addEventListener('change', syncProductSelect);
+    syncProductSelect();
+
+    function garmentType(category) {
+        const value = String(category || '').toLowerCase().trim();
+        if (value.includes('dress') || value.includes('gown')) return 'dress';
+        if (value.includes('bottom') || value.includes('pant') ||
+            value.includes('skirt') || value.includes('short')) return 'bottom';
+        return 'top';
+    }
+
+    photoInput.addEventListener('change', () => {
+        const file = photoInput.files && photoInput.files[0];
+        if (file && file.size > 12 * 1024 * 1024) {
+            photoInput.value = '';
+            status.textContent = 'Please choose a photo smaller than 12 MB.';
+        }
+    });
+
+    generateButton.addEventListener('click', async () => {
+        const person = photoInput.files && photoInput.files[0];
+        const option = aiSelect.selectedOptions[0];
+        const imageUrl = option ? option.dataset.image : '';
+
+        if (!person) {
+            status.textContent = 'Please upload your photo first.';
+            photoInput.focus();
+            return;
+        }
+        if (!imageUrl) {
+            status.textContent = 'The selected product does not have a product image.';
+            return;
+        }
+        if (person.size > 12 * 1024 * 1024) {
+            status.textContent = 'Your photo must be 12 MB or smaller.';
+            return;
+        }
+
+        generateButton.disabled = true;
+        generateButton.textContent = 'GENERATING...';
+        downloadLink.hidden = true;
+        status.textContent = 'Preparing your photo and DIANE product. Please wait...';
+
+        try {
+            const garmentResponse = await fetch(imageUrl);
+            if (!garmentResponse.ok) throw new Error('Could not load the selected product image.');
+            const garmentBlob = await garmentResponse.blob();
+            if (!/^image\/(jpeg|png|webp)$/i.test(garmentBlob.type)) {
+                throw new Error('The selected product image must be JPG, PNG, or WEBP.');
+            }
+
+            const extension = garmentBlob.type.includes('png') ? 'png' :
+                (garmentBlob.type.includes('webp') ? 'webp' : 'jpg');
+            const formData = new FormData();
+            formData.append('person', person, person.name || 'customer-photo.jpg');
+            formData.append('garment', garmentBlob, 'diane-product.' + extension);
+            formData.append('garment_type', garmentType(option.dataset.category));
+
+            status.textContent = 'CLOAK is generating your AI Try-On. This may take a few minutes...';
+            const response = await fetch('cloak_tryon_api.php', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success || !payload.result_url) {
+                throw new Error(payload.error || 'AI Try-On could not be completed.');
+            }
+
+            resultImage.src = payload.result_url;
+            resultImage.hidden = false;
+            placeholder.hidden = true;
+            downloadLink.href = payload.result_url;
+            downloadLink.hidden = false;
+            status.textContent = payload.message || 'Your AI Try-On result is ready.';
+        } catch (error) {
+            status.textContent = error.message || 'Something went wrong. Please try again later.';
+        } finally {
+            generateButton.disabled = false;
+            generateButton.textContent = 'GENERATE AI TRY-ON';
+        }
+    });
+})();
+
 </script>
 
 </body>
