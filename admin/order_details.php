@@ -235,6 +235,19 @@ function orderDetailsPaymentStatus($status): string
 // 10. PREPARE DISPLAY VALUES
 // ==========================================
 
+// Safe defaults keep all template variables defined.
+$status = 'Processing';
+$statusClass = 'processing';
+$orderDate = 'Not available';
+$customerName = 'Customer';
+$customerEmail = 'Not available';
+$phone = 'Not provided';
+$fullAddress = '';
+$paymentMethod = 'Not provided';
+$paymentStatus = 'Not available';
+$customerReceivedAt = null;
+$customerReceivedDate = null;
+
 if ($order) {
 
     $status = (string) ($order['status'] ?? 'Processing');
