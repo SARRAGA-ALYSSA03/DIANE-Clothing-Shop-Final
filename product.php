@@ -953,12 +953,24 @@ if (is_array($product)) {
 
             .diane-header {
                 flex-wrap: wrap;
-                justify-content: center;
+                justify-content: space-between;
+                align-items: center;
             }
 
             .diane-header-right {
-                width: 100%;
+                flex: 1 1 auto;
+                min-width: 0;
+                width: auto;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
                 justify-content: center;
+                gap: 10px;
+            }
+
+            .diane-navigation,
+            .diane-account {
+                justify-content: flex-end;
                 flex-wrap: wrap;
             }
 
@@ -976,21 +988,54 @@ if (is_array($product)) {
         @media (max-width: 600px) {
 
             .diane-header {
-                padding: 18px 4%;
-                flex-direction: column;
-                gap: 16px;
+                padding: 16px 4%;
+                flex-direction: row;
+                gap: 10px;
+            }
+
+            .diane-brand {
+                align-items: flex-start;
+            }
+
+            .diane-brand-name {
+                font-size: 29px;
+            }
+
+            .diane-brand-subtitle {
+                font-size: 7px;
+                letter-spacing: 3px;
             }
 
             .diane-header-right {
+                flex: 1 1 0;
+                width: auto;
                 flex-direction: column;
-                gap: 14px;
+                align-items: flex-end;
+                gap: 9px;
             }
 
-            .diane-navigation,
+            .diane-navigation {
+                width: 100%;
+                justify-content: flex-end;
+                flex-wrap: nowrap;
+                gap: clamp(6px, 2vw, 11px);
+            }
+
+            .diane-navigation a,
+            .diane-account a {
+                font-size: 8px;
+                letter-spacing: .5px;
+            }
+
             .diane-account {
-                justify-content: center;
+                width: 100%;
+                justify-content: flex-end;
                 flex-wrap: wrap;
-                gap: 12px;
+                gap: 8px;
+            }
+
+            .diane-greeting {
+                display: none;
             }
 
             .product-page {
@@ -1350,6 +1395,10 @@ if (is_array($product)) {
                     href="cart.php"
                 >
                     MY BAG (<?= (int)$cartCount ?>)
+                </a>
+
+                <a href="my_orders.php">
+                    MY ORDERS
                 </a>
 
                 <a href="logout.php">

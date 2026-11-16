@@ -210,6 +210,79 @@ function collectionEscape($value): string {
         @media(max-width:1100px) { .product-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } .diane-header-right { gap:16px; } .diane-navigation { gap:13px; } }
         @media(max-width:800px) { .diane-header { flex-wrap:wrap; justify-content:center; } .diane-header-right { width:100%; justify-content:center; flex-wrap:wrap; margin:0; } }
         @media(max-width:600px) { .diane-header { padding:18px 4%; flex-direction:column; gap:15px; } .diane-header-right { flex-direction:column; gap:14px; } .diane-navigation,.diane-account { justify-content:center; flex-wrap:wrap; gap:12px; } .shop-hero { padding:55px 6% 42px; } .shop-main { padding:32px 4% 65px; } .shop-top { align-items:flex-start; flex-direction:column; } .product-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:30px 12px; } .shop-tools { align-items:stretch; flex-direction:column; } .search-row { align-items:stretch; flex-direction:column; } .sort-form { justify-content:space-between; } .sort-form select { flex:1; min-width:0; } .footer-top,.footer-bottom { flex-direction:column; } }
+
+        /* DIANE shared mobile header alignment: logo left, navigation/account right.
+           Mirrors the homepage mobile header; desktop rules remain unchanged. */
+        @media (max-width: 600px) {
+            .diane-header {
+                display: grid;
+                grid-template-columns: minmax(88px, 0.8fr) minmax(0, 2fr);
+                align-items: center;
+                justify-content: stretch;
+                column-gap: 12px;
+                row-gap: 10px;
+                padding: 14px 4%;
+            }
+            .diane-brand {
+                grid-column: 1;
+                grid-row: 1;
+                width: auto;
+                min-width: 0;
+                align-items: flex-start;
+                justify-self: start;
+            }
+            .diane-brand-name { font-size: 27px; letter-spacing: 1.5px; }
+            .diane-brand-subtitle { font-size: 6px; letter-spacing: 2.4px; }
+            .diane-header-right {
+                grid-column: 2;
+                grid-row: 1;
+                width: 100%;
+                min-width: 0;
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                justify-content: center;
+                gap: 11px;
+            }
+            .diane-navigation {
+                width: 100%;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 6px 10px;
+            }
+            .diane-navigation a { font-size: 8px; letter-spacing: .35px; }
+            .diane-account {
+                width: 100%;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 6px 9px;
+                white-space: normal;
+            }
+            .diane-account a { font-size: 8px; letter-spacing: .25px; }
+            .diane-greeting { font-size: 9px; }
+            .diane-profile-icon { width: 26px; height: 26px; flex: 0 0 26px; }
+        }
+        @media (max-width: 380px) {
+            .diane-header {
+                grid-template-columns: 78px minmax(0, 1fr);
+                column-gap: 8px;
+                padding-left: 3%;
+                padding-right: 3%;
+            }
+            .diane-brand-name { font-size: 24px; }
+            .diane-navigation { gap: 5px 7px; }
+            .diane-navigation a, .diane-account a {
+                font-size: 7px;
+                letter-spacing: .15px;
+            }
+            .diane-account { gap: 5px 7px; }
+        }
+
     </style>
 </head>
 <body>

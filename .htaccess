@@ -1,0 +1,16 @@
+
+# Protect hidden files such as .env and .git
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Protect Composer files and sensitive backups
+<FilesMatch "^(composer\.(json|lock)|.*\.(ini|log|sql|bak|backup))$">
+    Require all denied
+</FilesMatch>
+
+# Block direct web access to vendor
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^vendor/ - [F,L]
+</IfModule>

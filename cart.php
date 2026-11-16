@@ -136,6 +136,65 @@ function cartEscape($value): string
     );
 }
 
+// Retrieve the customer's saved profile photo from the private Supabase bucket.
+$customerProfileImageUrl = '';
+
+$avatarProfileResult = supabaseRequest(
+    '/rest/v1/profiles?select=avatar_url&id=eq.' .
+    rawurlencode($userId) . '&limit=1',
+    'GET',
+    null,
+    $accessToken
+);
+
+if (
+    !empty($avatarProfileResult['success']) &&
+    is_array($avatarProfileResult['data'] ?? null) &&
+    !empty($avatarProfileResult['data'][0]['avatar_url'])
+) {
+    $avatarPath = (string) $avatarProfileResult['data'][0]['avatar_url'];
+
+    if (function_exists('curl_init')) {
+        $encodedAvatarPath = str_replace('%2F', '/', rawurlencode($avatarPath));
+        $signUrl = rtrim(SUPABASE_URL, '/') .
+            '/storage/v1/object/sign/customer-profiles/' .
+            $encodedAvatarPath;
+
+        $signCurl = curl_init($signUrl);
+        curl_setopt_array($signCurl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode(['expiresIn' => 3600]),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'apikey: ' . SUPABASE_KEY,
+                'Authorization: Bearer ' . $accessToken
+            ],
+            CURLOPT_TIMEOUT => 20
+        ]);
+
+        $signResponse = curl_exec($signCurl);
+        $signStatus = curl_getinfo($signCurl, CURLINFO_HTTP_CODE);
+        curl_close($signCurl);
+
+        if ($signResponse !== false && $signStatus >= 200 && $signStatus < 300) {
+            $signData = json_decode($signResponse, true);
+            $signedPath = $signData['signedURL'] ?? '';
+
+            if (is_string($signedPath) && $signedPath !== '') {
+                if (strpos($signedPath, 'http') === 0) {
+                    $customerProfileImageUrl = $signedPath;
+                } elseif (strpos($signedPath, '/storage/v1/') === 0) {
+                    $customerProfileImageUrl = rtrim(SUPABASE_URL, '/') . $signedPath;
+                } else {
+                    $customerProfileImageUrl = rtrim(SUPABASE_URL, '/') .
+                        '/storage/v1/' . ltrim($signedPath, '/');
+                }
+            }
+        }
+    }
+}
+
 // ==========================================
 // 5. CART FEEDBACK
 // ==========================================
@@ -743,6 +802,14 @@ foreach ($cartItems as $item) {
             height: 16px;
             display: block;
 
+        }
+
+        .diane-profile-icon img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }
 
         .diane-profile-icon:hover,
@@ -1358,6 +1425,29 @@ foreach ($cartItems as $item) {
 
         }
 
+        @media (max-width: 380px) {
+            .diane-header {
+                padding-left: 3%;
+                padding-right: 3%;
+                gap: 6px;
+            }
+
+            .diane-navigation,
+            .diane-account {
+                gap: 6px 8px;
+            }
+
+            .diane-navigation a,
+            .diane-account a {
+                font-size: 8px;
+                letter-spacing: .3px;
+            }
+
+            .diane-greeting {
+                display: none;
+            }
+        }
+
         @media (max-width: 800px) {
 
             .cart-layout {
@@ -1373,30 +1463,70 @@ foreach ($cartItems as $item) {
 
         }
 
-        @media (max-width: 600px) {
+        @media (max-width: 800px) {
 
             .diane-header {
+                min-height: 72px;
+                padding: 12px 4%;
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr);
+                align-items: center;
+                gap: 10px;
+            }
 
-                padding: 18px 4%;
-                flex-direction: column;
-                gap: 16px;
+            .diane-brand {
+                align-items: flex-start;
+            }
 
+            .diane-brand-name {
+                font-size: 27px;
+            }
+
+            .diane-brand-subtitle {
+                margin-top: 4px;
+                font-size: 6px;
+                letter-spacing: 2.5px;
             }
 
             .diane-header-right {
-
+                min-width: 0;
+                margin-left: auto;
+                display: flex;
                 flex-direction: column;
-                gap: 14px;
-
+                align-items: flex-end;
+                justify-content: center;
+                gap: 9px;
             }
 
             .diane-navigation,
             .diane-account {
-
-                justify-content: center;
+                max-width: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
                 flex-wrap: wrap;
-                gap: 12px;
+                gap: 8px 12px;
+            }
 
+            .diane-navigation a,
+            .diane-account a {
+                font-size: 9px;
+                letter-spacing: .6px;
+            }
+
+            .diane-greeting {
+                font-size: 9px;
+            }
+
+            .diane-profile-icon {
+                width: 27px;
+                height: 27px;
+                flex-basis: 27px;
+            }
+
+            .diane-profile-icon svg {
+                width: 14px;
+                height: 14px;
             }
 
             .cart-page {
@@ -1492,6 +1622,8 @@ foreach ($cartItems as $item) {
                 MY BAG (<?= (int) $totalItems ?>)
             </a>
 
+            <a href="my_orders.php">MY ORDERS</a>
+
             <a href="logout.php">
                 LOG OUT
             </a>
@@ -1507,19 +1639,26 @@ foreach ($cartItems as $item) {
                 aria-label="Open my profile"
                 title="My profile"
             >
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.6"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                >
-                    <circle cx="12" cy="8" r="3.5"></circle>
-                    <path d="M5 20c.7-3.3 3.2-5 7-5s6.3 1.7 7 5"></path>
-                </svg>
+                <?php if ($customerProfileImageUrl !== ''): ?>
+                    <img
+                        src="<?= cartEscape($customerProfileImageUrl) ?>"
+                        alt="My profile"
+                    >
+                <?php else: ?>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <circle cx="12" cy="8" r="3.5"></circle>
+                        <path d="M5 20c.7-3.3 3.2-5 7-5s6.3 1.7 7 5"></path>
+                    </svg>
+                <?php endif; ?>
             </a>
 
         </div>
@@ -2040,3 +2179,4 @@ foreach ($cartItems as $item) {
 
 </body>
 </html>
+                    

@@ -166,6 +166,67 @@ $_SESSION['customer_refresh_token'] = $refreshData['refresh_token'];
 
 $accessToken = (string) $_SESSION['customer_access_token'];
 
+
+// Load the customer's saved profile photo from the private Supabase bucket.
+$customerProfileImageUrl = '';
+
+$avatarProfileResult = supabaseRequest(
+    '/rest/v1/profiles?select=avatar_url&id=eq.' .
+    rawurlencode($userId) . '&limit=1',
+    'GET',
+    null,
+    $accessToken
+);
+
+if (
+    !empty($avatarProfileResult['success']) &&
+    is_array($avatarProfileResult['data'] ?? null) &&
+    !empty($avatarProfileResult['data'][0]['avatar_url'])
+) {
+    $avatarPath = (string) $avatarProfileResult['data'][0]['avatar_url'];
+
+    if (function_exists('curl_init')) {
+        $encodedAvatarPath = str_replace('%2F', '/', rawurlencode($avatarPath));
+        $signUrl = rtrim(SUPABASE_URL, '/') .
+            '/storage/v1/object/sign/customer-profiles/' .
+            $encodedAvatarPath;
+
+        $signCurl = curl_init($signUrl);
+        curl_setopt_array($signCurl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode(['expiresIn' => 3600]),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'apikey: ' . SUPABASE_KEY,
+                'Authorization: Bearer ' . $accessToken
+            ],
+            CURLOPT_TIMEOUT => 20
+        ]);
+
+        $signResponse = curl_exec($signCurl);
+        $signStatus = curl_getinfo($signCurl, CURLINFO_HTTP_CODE);
+        curl_close($signCurl);
+
+        if ($signResponse !== false && $signStatus >= 200 && $signStatus < 300) {
+            $signData = json_decode($signResponse, true);
+            $signedPath = $signData['signedURL'] ?? '';
+
+            if (is_string($signedPath) && $signedPath !== '') {
+                if (strpos($signedPath, 'http') === 0) {
+                    $customerProfileImageUrl = $signedPath;
+                } elseif (strpos($signedPath, '/storage/v1/') === 0) {
+                    $customerProfileImageUrl = rtrim(SUPABASE_URL, '/') . $signedPath;
+                } else {
+                    $customerProfileImageUrl = rtrim(SUPABASE_URL, '/') .
+                        '/storage/v1/' . ltrim($signedPath, '/');
+                }
+            }
+        }
+    }
+}
+
+
 // ==========================================
 
 // 3. CUSTOMER INFORMATION
@@ -1093,6 +1154,14 @@ foreach ($cartItems as $item) {
 
             }
 
+            .diane-profile-icon img {
+                display: block;
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                border-radius: 50%;
+            }
+
             .diane-profile-icon:hover {
 
                 background: var(--black);
@@ -1928,39 +1997,100 @@ foreach ($cartItems as $item) {
 
         }
 
-        @media (max-width: 650px) {
+        @media (max-width: 900px) {
 
             .diane-header {
+                min-height: 72px;
+                padding: 12px 4%;
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr);
+                align-items: center;
+                gap: 10px;
+            }
 
-                padding: 18px 4%;
+            .diane-brand {
+                align-items: flex-start;
+            }
 
-                flex-direction: column;
+            .diane-brand-name {
+                font-size: 27px;
+            }
 
-                gap: 16px;
-
+            .diane-brand-subtitle {
+                margin-top: 4px;
+                font-size: 6px;
+                letter-spacing: 2.5px;
             }
 
             .header-right {
-
+                min-width: 0;
+                margin-left: auto;
+                display: flex;
                 flex-direction: column;
-
-                gap: 14px;
-
+                align-items: flex-end;
+                justify-content: center;
+                gap: 9px;
             }
 
             .navigation,
-
             .account-links {
-
-                justify-content: center;
-
+                max-width: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
                 flex-wrap: wrap;
-
-                gap: 12px;
-
+                gap: 8px 12px;
             }
 
-            .checkout-page {
+            .navigation a,
+            .account-links a {
+                font-size: 9px;
+                letter-spacing: .6px;
+            }
+
+            .greeting {
+                font-size: 9px;
+            }
+
+            .diane-profile-icon {
+                width: 27px;
+                height: 27px;
+                flex: 0 0 27px;
+            }
+
+            .diane-profile-icon svg {
+                width: 14px;
+                height: 14px;
+            }
+
+        }
+
+        @media (max-width: 380px) {
+            .diane-header {
+                padding-left: 3%;
+                padding-right: 3%;
+                gap: 6px;
+            }
+
+            .navigation,
+            .account-links {
+                gap: 6px 8px;
+            }
+
+            .navigation a,
+            .account-links a {
+                font-size: 8px;
+                letter-spacing: .3px;
+            }
+
+            .greeting {
+                display: none;
+            }
+        }
+
+        @media (max-width: 650px) {
+
+                    .checkout-page {
 
                 padding: 40px 5% 65px;
 
@@ -2063,33 +2193,26 @@ foreach ($cartItems as $item) {
                 title="My profile"
 
             >
-
-                <svg
-
-                    xmlns="http://www\.w3.org/2000/svg"
-
-                    viewBox="0 0 24 24"
-
-                    fill="none"
-
-                    stroke="currentColor"
-
-                    stroke-width="1.6"
-
-                    stroke-linecap="round"
-
-                    stroke-linejoin="round"
-
-                    aria-hidden="true"
-
-                >
-
-                    <circle cx="12" cy="8" r="3.5"></circle>
-
-                    <path d="M5 20c.7-3.3 3.2-5 7-5s6.3 1.7 7 5"></path>
-
-                </svg>
-
+                <?php if ($customerProfileImageUrl !== ''): ?>
+                    <img
+                        src="<?= checkoutEscape($customerProfileImageUrl) ?>"
+                        alt="My profile"
+                    >
+                <?php else: ?>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <circle cx="12" cy="8" r="3.5"></circle>
+                        <path d="M5 20c.7-3.3 3.2-5 7-5s6.3 1.7 7 5"></path>
+                    </svg>
+                <?php endif; ?>
             </a>
 
         </div>

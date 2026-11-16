@@ -602,9 +602,35 @@ h1 {
     margin-top: 20px;
 }
 
+@media(max-width: 600px) {
+    header {
+        padding: 16px 5%;
+        gap: 12px;
+    }
+
+    .logo {
+        font-size: 25px;
+        letter-spacing: 4px;
+        flex-shrink: 0;
+    }
+
+    .logo span {
+        font-size: 7px;
+        letter-spacing: 3px;
+    }
+
+    .back-link {
+        font-size: 9px;
+        letter-spacing: .7px;
+        text-align: right;
+        white-space: nowrap;
+    }
+}
+
 @media(max-width: 500px) {
 
     main {
+        width: 90%;
         margin: 35px auto;
     }
 
@@ -618,6 +644,26 @@ h1 {
 
     .avatar-section {
         gap: 15px;
+    }
+}
+
+@media(max-width: 360px) {
+    header {
+        padding-left: 4%;
+        padding-right: 4%;
+    }
+
+    .logo {
+        font-size: 22px;
+        letter-spacing: 3px;
+    }
+
+    .logo span {
+        letter-spacing: 2.5px;
+    }
+
+    .back-link {
+        font-size: 8px;
     }
 }
 

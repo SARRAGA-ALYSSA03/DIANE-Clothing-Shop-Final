@@ -1541,11 +1541,11 @@ function dianeRenderHomepageProducts(array $items): void
    DIANE VIRTUAL TRY-ON CAMERA SIZE UPDATE
 ========================================= */
 
-/* Slightly larger camera on desktop */
+/* Slightly larger MANUAL Try-On camera on desktop (about 8–10%). */
 @media (min-width: 801px) {
     .tryon-layout {
-        max-width: 1180px;
-        grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.75fr);
+        max-width: 1240px;
+        grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.7fr);
         gap: 28px;
     }
 
@@ -1956,6 +1956,35 @@ function dianeRenderHomepageProducts(array $items): void
 
     .diane-account {
         gap: 5px 7px;
+    }
+}
+
+
+/* MOBILE MANUAL TRY-ON: portrait camera preview.
+   The video remains cover-cropped inside the frame; overlay controls are unchanged. */
+@media (max-width: 800px) {
+    #manual-tryon-panel .camera-stage {
+        width: 100%;
+        aspect-ratio: 4 / 5;
+        min-height: 420px;
+        max-height: 70svh;
+        margin: 0 auto;
+        background: #e9e9e7;
+    }
+
+    #manual-tryon-panel .camera-stage video {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        object-fit: cover;
+        object-position: center;
+    }
+}
+
+@media (max-width: 380px) {
+    #manual-tryon-panel .camera-stage {
+        min-height: 360px;
+        max-height: 66svh;
     }
 }
 
