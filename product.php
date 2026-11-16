@@ -443,6 +443,37 @@ if (is_array($product)) {
             font-size: 11px;
         }
 
+        .diane-profile-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            margin-left: -7px;
+            color: #111111;
+            text-decoration: none;
+            border: 1px solid #e5e5e5;
+            border-radius: 50%;
+            transition: background .2s ease, color .2s ease, border-color .2s ease;
+        }
+
+        .diane-profile-link:hover {
+            background: #111111;
+            color: #ffffff;
+            border-color: #111111;
+        }
+
+        .diane-profile-link svg {
+            display: block;
+            width: 16px;
+            height: 16px;
+        }
+
+        .diane-profile-link:focus-visible {
+            outline: 2px solid #777777;
+            outline-offset: 3px;
+        }
+
         .diane-bag-link {
             font-weight: 600 !important;
         }
@@ -1300,7 +1331,7 @@ if (is_array($product)) {
                 HOME
             </a>
 
-            <a href="index.php#collection">
+            <a href="collection.php">
                 COLLECTION
             </a>
 
@@ -1328,6 +1359,15 @@ if (is_array($product)) {
                 <span class="diane-greeting">
                     Hi, <?= productEscape($customerName) ?>
                 </span>
+
+                <a class="diane-profile-link" href="profile.php"
+                   aria-label="View your profile" title="My Profile">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.6"/>
+                        <path d="M4.8 20c.7-3.4 3.3-5.2 7.2-5.2s6.5 1.8 7.2 5.2"
+                              stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    </svg>
+                </a>
 
             <?php else: ?>
 
@@ -1361,7 +1401,7 @@ if (is_array($product)) {
             Please refresh the page or return to the collection.
         </p>
 
-        <a href="index.php#collection">
+        <a href="collection.php">
             BACK TO COLLECTION
         </a>
 
@@ -1377,7 +1417,7 @@ if (is_array($product)) {
             This product may have been removed or the link may be incorrect.
         </p>
 
-        <a href="index.php#collection">
+        <a href="collection.php">
             BACK TO COLLECTION
         </a>
 
@@ -1389,7 +1429,7 @@ if (is_array($product)) {
 
         <a
             class="product-back-link"
-            href="index.php#collection"
+            href="collection.php"
         >
             ← BACK TO COLLECTION
         </a>
@@ -1943,7 +1983,7 @@ if (is_array($product)) {
                 HOME
             </a>
 
-            <a href="index.php#collection">
+            <a href="collection.php">
                 COLLECTION
             </a>
 

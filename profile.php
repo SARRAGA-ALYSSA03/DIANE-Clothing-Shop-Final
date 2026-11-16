@@ -399,6 +399,16 @@ header {
     color: #111;
 }
 
+.logo span {
+    display: block;
+    margin-top: 5px;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    text-align: center;
+}
+
 .back-link {
     text-decoration: none;
     color: #111;
@@ -621,6 +631,7 @@ h1 {
 
     <a href="index.php" class="logo">
         DIANE
+        <span>CLOTHING SHOP</span>
     </a>
 
     <a href="index.php" class="back-link">

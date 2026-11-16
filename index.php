@@ -53,6 +53,67 @@ $customerName = (
 )
     ? $nameParts[0]
     : 'Customer';
+$customerProfileImageUrl = '';
+
+// Retrieve the customer's saved avatar path and create a temporary URL
+// because the customer-profiles Supabase Storage bucket is private.
+if ($isCustomerLoggedIn) {
+    $avatarProfileResult = supabaseRequest(
+        '/rest/v1/profiles?select=avatar_url&id=eq.' .
+        rawurlencode((string)$_SESSION['customer_id']) . '&limit=1',
+        'GET',
+        null,
+        (string)$_SESSION['customer_access_token']
+    );
+
+    if (
+        !empty($avatarProfileResult['success']) &&
+        is_array($avatarProfileResult['data'] ?? null) &&
+        !empty($avatarProfileResult['data'][0]['avatar_url'])
+    ) {
+        $avatarPath = (string)$avatarProfileResult['data'][0]['avatar_url'];
+
+        if (function_exists('curl_init')) {
+            $encodedAvatarPath = str_replace('%2F', '/', rawurlencode($avatarPath));
+            $signUrl = rtrim(SUPABASE_URL, '/') .
+                '/storage/v1/object/sign/customer-profiles/' .
+                $encodedAvatarPath;
+
+            $signCurl = curl_init($signUrl);
+            curl_setopt_array($signCurl, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode(['expiresIn' => 3600]),
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'apikey: ' . SUPABASE_KEY,
+                    'Authorization: Bearer ' . (string)$_SESSION['customer_access_token']
+                ],
+                CURLOPT_TIMEOUT => 20
+            ]);
+
+            $signResponse = curl_exec($signCurl);
+            $signStatus = curl_getinfo($signCurl, CURLINFO_HTTP_CODE);
+            curl_close($signCurl);
+
+            if ($signResponse !== false && $signStatus >= 200 && $signStatus < 300) {
+                $signData = json_decode($signResponse, true);
+                $signedPath = $signData['signedURL'] ?? '';
+
+                if (is_string($signedPath) && $signedPath !== '') {
+                    if (strpos($signedPath, 'http') === 0) {
+                        $customerProfileImageUrl = $signedPath;
+                    } elseif (strpos($signedPath, '/storage/v1/') === 0) {
+                        $customerProfileImageUrl = rtrim(SUPABASE_URL, '/') . $signedPath;
+                    } else {
+                        $customerProfileImageUrl = rtrim(SUPABASE_URL, '/') .
+                            '/storage/v1/' . ltrim($signedPath, '/');
+                    }
+                }
+            }
+        }
+    }
+}
 // Generate CSRF token.
 if ($isCustomerLoggedIn && empty($_SESSION['customer_csrf'])) {
     $_SESSION['customer_csrf'] = bin2hex(random_bytes(32));
@@ -197,6 +258,70 @@ if (count($featuredSlides) > 1) {
     $heroSlides = $featuredSlides;
 }
 $heroSlides = array_slice($heroSlides, 0, 5);
+
+// Homepage highlights: use real product flags and actual sale-price data.
+$featuredProducts = array_values(array_filter($products, function ($product) {
+    return !empty($product['is_featured']);
+}));
+if (empty($featuredProducts)) {
+    $featuredProducts = array_slice($products, 0, 4);
+}
+$featuredProducts = array_slice($featuredProducts, 0, 4);
+
+$newArrivalProducts = array_slice(array_values(array_filter($products, function ($product) {
+    return !empty($product['is_new']);
+})), 0, 4);
+
+$saleProducts = array_slice(array_values(array_filter($products, function ($product) {
+    return $product['original_price'] !== null &&
+        $product['original_price'] > $product['price'];
+})), 0, 4);
+
+function dianeRenderHomepageProducts(array $items): void
+{
+    if (empty($items)) {
+        echo '<p class="diane-empty-message">More styles coming soon. Please check back later.</p>';
+        return;
+    }
+
+    foreach ($items as $product) {
+        $productUrl = 'product.php?id=' . rawurlencode((string)$product['id']);
+        $name = htmlspecialchars((string)$product['name'], ENT_QUOTES, 'UTF-8');
+        $image = htmlspecialchars((string)$product['image'], ENT_QUOTES, 'UTF-8');
+        $category = htmlspecialchars((string)$product['category'], ENT_QUOTES, 'UTF-8');
+        ?>
+        <article class="diane-product-card">
+            <div class="diane-product-visual">
+                <a href="<?= htmlspecialchars($productUrl, ENT_QUOTES, 'UTF-8') ?>" aria-label="View <?= $name ?>">
+                    <?php if ($image !== ''): ?>
+                        <img src="<?= $image ?>" alt="<?= $name ?>" loading="lazy">
+                    <?php endif; ?>
+                </a>
+                <?php if (!empty($product['is_new'])): ?>
+                    <span class="diane-product-badge">NEW</span>
+                <?php elseif ($product['original_price'] !== null && $product['original_price'] > $product['price']): ?>
+                    <span class="diane-product-badge">SALE</span>
+                <?php else: ?>
+                    <span class="diane-product-badge">FEATURED</span>
+                <?php endif; ?>
+            </div>
+            <div class="diane-product-info">
+                <p class="diane-product-category"><?= $category ?></p>
+                <a class="diane-product-name" href="<?= htmlspecialchars($productUrl, ENT_QUOTES, 'UTF-8') ?>"><?= $name ?></a>
+                <div class="diane-price-row">
+                    <span class="diane-product-price">₱<?= number_format((float)$product['price'], 2) ?></span>
+                    <?php if ($product['original_price'] !== null && $product['original_price'] > $product['price']): ?>
+                        <span class="diane-old-price">₱<?= number_format((float)$product['original_price'], 2) ?></span>
+                    <?php endif; ?>
+                </div>
+                <div class="diane-card-links">
+                    <a href="<?= htmlspecialchars($productUrl, ENT_QUOTES, 'UTF-8') ?>">VIEW DETAILS</a>
+                </div>
+            </div>
+        </article>
+        <?php
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -344,10 +469,17 @@ $heroSlides = array_slice($heroSlides, 0, 5);
             text-decoration: none;
             transition: background .2s ease, color .2s ease, border-color .2s ease;
         }
-        .diane-profile-icon svg {
+        .diane-profile-icon svg,
+        .diane-profile-icon img {
             width: 16px;
             height: 16px;
             display: block;
+        }
+        .diane-profile-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }
         .diane-profile-icon:hover {
             background: #111111;
@@ -1451,7 +1583,383 @@ $heroSlides = array_slice($heroSlides, 0, 5);
     }
 }
 
-  </style>
+
+/* MOBILE HEADER ALIGNMENT — match the desktop's left-aligned navigation */
+@media (max-width: 600px) {
+    .diane-header {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        padding: 16px 5%;
+        gap: 14px;
+    }
+    .diane-brand {
+        width: auto;
+        align-items: flex-start;
+        align-self: flex-start;
+    }
+    .diane-brand-name {
+        font-size: 30px;
+    }
+    .diane-brand-subtitle {
+        margin-top: 5px;
+        font-size: 7px;
+        letter-spacing: 3px;
+    }
+    .diane-header-right {
+        width: 100%;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 12px;
+    }
+    .diane-navigation {
+        width: 100%;
+        justify-content: flex-start;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px 18px;
+    }
+    .diane-navigation a,
+    .diane-account a {
+        font-size: 9px;
+        letter-spacing: .6px;
+    }
+    .diane-account {
+        width: 100%;
+        justify-content: flex-start;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px 14px;
+    }
+    .diane-greeting {
+        font-size: 10px;
+    }
+    .diane-profile-icon {
+        width: 29px;
+        height: 29px;
+    }
+    .diane-hero-copy {
+        padding: 48px 7% 42px;
+    }
+    .diane-hero-title {
+        font-size: clamp(39px, 10vw, 52px);
+        line-height: 1.08;
+    }
+    .diane-hero-description {
+        margin: 18px 0 25px;
+        font-size: 13px;
+        line-height: 1.75;
+    }
+    .diane-hero-image {
+        min-height: 300px;
+    }
+}
+@media (max-width: 360px) {
+    .diane-navigation { gap: 10px 12px; }
+    .diane-navigation a,
+    .diane-account a { font-size: 8px; }
+}
+
+  
+/* =========================================
+   FINAL MOBILE HEADER: DESKTOP-INSPIRED ALIGNMENT
+   Logo first, navigation second, account third.
+   Desktop styles are not changed.
+========================================= */
+@media (max-width: 600px) {
+    .diane-header {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 14px;
+        padding: 16px 5%;
+    }
+
+    .diane-brand {
+        flex: 0 0 100%;
+        width: 100%;
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .diane-header-right {
+        width: 100%;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 13px;
+    }
+
+    .diane-navigation {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px 18px;
+    }
+
+    .diane-navigation a {
+        font-size: 9px;
+        letter-spacing: .7px;
+    }
+
+    .diane-account {
+        width: 100%;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px 15px;
+        white-space: normal;
+    }
+
+    .diane-account a {
+        font-size: 9px;
+        letter-spacing: .6px;
+    }
+
+    .diane-greeting {
+        font-size: 10px;
+    }
+
+    .diane-profile-icon {
+        flex: 0 0 30px;
+        width: 30px;
+        height: 30px;
+    }
+}
+
+@media (max-width: 360px) {
+    .diane-navigation {
+        gap: 9px 12px;
+    }
+
+    .diane-navigation a,
+    .diane-account a {
+        font-size: 8px;
+        letter-spacing: .35px;
+    }
+
+    .diane-account {
+        gap: 9px 11px;
+    }
+}
+
+
+/* FINAL ALIGNMENT FIX:
+   Keep the brand on the left and place navigation/account links on the right
+   on mobile, matching the desktop visual direction. */
+@media (max-width: 600px) {
+    .diane-header {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px 12px;
+        padding: 16px 5%;
+    }
+
+    .diane-brand {
+        flex: 0 0 auto;
+        width: auto;
+        align-items: flex-start;
+        text-align: left;
+        margin-right: auto;
+    }
+
+    .diane-header-right {
+        flex: 0 0 100%;
+        width: 100%;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        justify-content: flex-end;
+        gap: 12px;
+    }
+
+    .diane-navigation {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 9px 16px;
+    }
+
+    .diane-navigation a {
+        font-size: 9px;
+        letter-spacing: .65px;
+    }
+
+    .diane-account {
+        width: 100%;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 9px 13px;
+        white-space: normal;
+    }
+
+    .diane-account a {
+        font-size: 9px;
+        letter-spacing: .55px;
+    }
+
+    .diane-greeting {
+        font-size: 10px;
+    }
+
+    .diane-profile-icon {
+        flex: 0 0 30px;
+        width: 30px;
+        height: 30px;
+    }
+}
+
+@media (max-width: 360px) {
+    .diane-navigation {
+        gap: 8px 11px;
+    }
+
+    .diane-navigation a,
+    .diane-account a {
+        font-size: 8px;
+        letter-spacing: .3px;
+    }
+
+    .diane-account {
+        gap: 8px 10px;
+    }
+}
+
+
+/* MOBILE HEADER: keep the desktop left/right relationship.
+   Brand occupies the left column; navigation and account stay on the right. */
+@media (max-width: 600px) {
+    .diane-header {
+        display: grid;
+        grid-template-columns: minmax(88px, 0.8fr) minmax(0, 2fr);
+        align-items: center;
+        justify-content: stretch;
+        column-gap: 12px;
+        row-gap: 10px;
+        padding: 14px 4%;
+    }
+
+    .diane-brand {
+        grid-column: 1;
+        grid-row: 1;
+        width: auto;
+        min-width: 0;
+        align-items: flex-start;
+        justify-self: start;
+    }
+
+    .diane-brand-name {
+        font-size: 27px;
+        letter-spacing: 1.5px;
+    }
+
+    .diane-brand-subtitle {
+        font-size: 6px;
+        letter-spacing: 2.4px;
+    }
+
+    .diane-header-right {
+        grid-column: 2;
+        grid-row: 1;
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 11px;
+    }
+
+    .diane-navigation {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px 10px;
+    }
+
+    .diane-navigation a {
+        font-size: 8px;
+        letter-spacing: .35px;
+    }
+
+    .diane-account {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px 9px;
+        white-space: normal;
+    }
+
+    .diane-account a {
+        font-size: 8px;
+        letter-spacing: .25px;
+    }
+
+    .diane-greeting {
+        font-size: 9px;
+    }
+
+    .diane-profile-icon {
+        width: 26px;
+        height: 26px;
+        flex: 0 0 26px;
+    }
+}
+
+@media (max-width: 380px) {
+    .diane-header {
+        grid-template-columns: 78px minmax(0, 1fr);
+        column-gap: 8px;
+        padding-left: 3%;
+        padding-right: 3%;
+    }
+
+    .diane-brand-name {
+        font-size: 24px;
+    }
+
+    .diane-navigation {
+        gap: 5px 7px;
+    }
+
+    .diane-navigation a,
+    .diane-account a {
+        font-size: 7px;
+        letter-spacing: .15px;
+    }
+
+    .diane-account {
+        gap: 5px 7px;
+    }
+}
+
+</style>
 
 </head>
 <body>
@@ -1470,7 +1978,7 @@ $heroSlides = array_slice($heroSlides, 0, 5);
     <div class="diane-header-right">
         <nav class="diane-navigation" aria-label="Main navigation">
             <a href="index.php">HOME</a>
-            <a href="#collection">COLLECTION</a>
+            <a href="collection.php">COLLECTION</a>
             <a href="#try-on">VIRTUAL TRY-ON</a>
         </nav>
         <div class="diane-account">
@@ -1501,19 +2009,26 @@ $heroSlides = array_slice($heroSlides, 0, 5);
                     aria-label="Open my profile"
                     title="My profile"
                 >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.6"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                    >
-                        <circle cx="12" cy="8" r="3.5"></circle>
-                        <path d="M5 20c.7-3.3 3.2-5 7-5s6.3 1.7 7 5"></path>
-                    </svg>
+                    <?php if ($customerProfileImageUrl !== ''): ?>
+                        <img
+                            src="<?= htmlspecialchars($customerProfileImageUrl, ENT_QUOTES, 'UTF-8') ?>"
+                            alt="My profile"
+                        >
+                    <?php else: ?>
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                        >
+                            <circle cx="12" cy="8" r="3.5"></circle>
+                            <path d="M5 20c.7-3.3 3.2-5 7-5s6.3 1.7 7 5"></path>
+                        </svg>
+                    <?php endif; ?>
                 </a>
             <?php else: ?>
                 <a href="login.php">
@@ -1542,13 +2057,13 @@ $heroSlides = array_slice($heroSlides, 0, 5);
             and styles that make everyday dressing feel special.
         </p>
         <a
-            href="#collection"
+            href="collection.php"
             class="diane-primary-button"
         >
             EXPLORE COLLECTION
         </a>
         <a
-            href="#collection"
+            href="collection.php"
             class="diane-hero-secondary"
         >
             DISCOVER YOUR STYLE
@@ -1626,303 +2141,49 @@ $heroSlides = array_slice($heroSlides, 0, 5);
     <!-- =========================================
          COLLECTION
     ========================================= -->
-    <section
-        id="collection"
-        class="diane-collection"
-    >
+    <section class="diane-collection diane-home-highlights" id="highlights">
         <div class="diane-section-top">
             <div>
-                <p class="diane-section-label">
-                    DISCOVER YOUR NEXT FAVORITE LOOK
-                </p>
-                <h2 class="diane-section-title">
-                    The Collection
-                </h2>
+                <p class="diane-section-label">HANDPICKED FOR YOU</p>
+                <h2 class="diane-section-title">Featured Pieces</h2>
             </div>
-            <span class="diane-product-count">
-                <?= count($visibleProducts) ?>
-                <?= $searchQuery !== '' ? 'RESULTS' : (
-                    count($visibleProducts) === 1 ? 'PRODUCT' : 'PRODUCTS'
-                ) ?>
-            </span>
+            <a class="diane-search-clear" href="collection.php">VIEW ALL COLLECTION</a>
         </div>
-        <!-- CATEGORY FILTERS -->
-        <div class="diane-category-list">
-            <?php foreach ($categories as $category): ?>
-                <a
-                    class="<?= $selectedCategory === $category ? 'active' : '' ?>"
-                    href="?category=<?= urlencode($category) ?><?= $searchQuery !== '' ? '&amp;search=' . urlencode($searchQuery) : '' ?>#collection"
-                    <?= $selectedCategory === $category
-                        ? 'aria-current="page"'
-                        : ''
-                    ?>
-                >
-                    <?= htmlspecialchars(
-                        $category,
-                        ENT_QUOTES,
-                        'UTF-8'
-                    ) ?>
-                </a>
-            <?php endforeach; ?>
-        </div>
-        <!-- CUSTOMER SEARCH -->
-        <div class="diane-search-row">
-            <form class="diane-search-form" method="GET" action="#collection" role="search">
-                <input
-                    type="hidden"
-                    name="category"
-                    value="<?= htmlspecialchars($selectedCategory, ENT_QUOTES, 'UTF-8') ?>"
-                >
-                <input
-                    class="diane-search-input"
-                    type="search"
-                    name="search"
-                    value="<?= htmlspecialchars($searchQuery, ENT_QUOTES, 'UTF-8') ?>"
-                    placeholder="Search dresses, tops, trousers..."
-                    aria-label="Search products"
-                    maxlength="100"
-                >
-                <button class="diane-search-button" type="submit">SEARCH</button>
-            </form>
-            <?php if ($searchQuery !== ''): ?>
-                <a class="diane-search-clear" href="?category=<?= urlencode($selectedCategory) ?>#collection">
-                    Clear search
-                </a>
-            <?php endif; ?>
-        </div>
-        <!-- PRODUCT GRID -->
         <div class="diane-product-grid">
-            <?php if ($productLoadError): ?>
-                <div class="diane-empty-message">
-                    We couldn't load the collection right now.
-                    <br>
-                    Please refresh the page and try again.
-                </div>
-            <?php elseif (empty($visibleProducts)): ?>
-                <div class="diane-empty-message">
-                    <?php if ($searchQuery !== ''): ?>
-                        No products found for &ldquo;<?= htmlspecialchars($searchQuery, ENT_QUOTES, 'UTF-8') ?>&rdquo;.
-                        <br>
-                        Try another product name or category.
-                    <?php else: ?>
-                        There are no products in this category yet.
-                        <br>
-                        Check back soon for new styles.
-                    <?php endif; ?>
-                </div>
-            <?php else: ?>
-                <?php foreach ($visibleProducts as $product): ?>
-                    <article class="diane-product-card">
-                        <!-- PRODUCT IMAGE -->
-                        <div class="diane-product-visual">
-                            <a
-                                href="product.php?id=<?= rawurlencode(
-                                    $product['id']
-                                ) ?>"
-                                aria-label="View <?= htmlspecialchars(
-                                    $product['name'],
-                                    ENT_QUOTES,
-                                    'UTF-8'
-                                ) ?>"
-                            >
-                                <?php if (!empty($product['image'])): ?>
-                                    <img
-                                        src="<?= htmlspecialchars(
-                                            $product['image'],
-                                            ENT_QUOTES,
-                                            'UTF-8'
-                                        ) ?>"
-                                        alt="<?= htmlspecialchars(
-                                            $product['name'],
-                                            ENT_QUOTES,
-                                            'UTF-8'
-                                        ) ?>"
-                                        loading="lazy"
-                                    >
-                                <?php endif; ?>
-                            </a>
-                            <?php if (!empty($product['is_new'])): ?>
-                                <span class="diane-product-badge">
-                                    NEW
-                                </span>
-                            <?php elseif (!empty($product['is_featured'])): ?>
-                                <span class="diane-product-badge">
-                                    FEATURED
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                        <!-- PRODUCT INFORMATION -->
-                        <div class="diane-product-info">
-                            <p class="diane-product-category">
-                                <?= htmlspecialchars(
-                                    $product['category'],
-                                    ENT_QUOTES,
-                                    'UTF-8'
-                                ) ?>
-                            </p>
-                            <a
-                                class="diane-product-name"
-                                href="product.php?id=<?= rawurlencode(
-                                    $product['id']
-                                ) ?>"
-                            >
-                                <?= htmlspecialchars(
-                                    $product['name'],
-                                    ENT_QUOTES,
-                                    'UTF-8'
-                                ) ?>
-                            </a>
-                            <!-- CUSTOMER RATING -->
-                            <div
-                                class="diane-product-rating"
-                                aria-label="<?= $product['review_count'] > 0
-                                    ? number_format($product['rating'], 1) . ' out of 5 stars, ' . $product['review_count'] . ' reviews'
-                                    : 'No customer reviews yet'
-                                ?>"
-                            >
-                                <?php if ($product['review_count'] > 0): ?>
-                                    <?php $filledStars = (int)round($product['rating']); ?>
-                                    <span class="diane-rating-stars" aria-hidden="true"><?= str_repeat('★', $filledStars) . str_repeat('☆', 5 - $filledStars) ?></span>
-                                    <span class="diane-rating-value"><?= number_format($product['rating'], 1) ?></span>
-                                    <span class="diane-rating-count">(<?= $product['review_count'] ?> <?= $product['review_count'] === 1 ? 'review' : 'reviews' ?>)</span>
-                                <?php else: ?>
-                                    <span class="diane-rating-empty">No reviews yet</span>
-                                <?php endif; ?>
-                            </div>
-                            <!-- PRICE -->
-                            <div class="diane-price-row">
-                                <span class="diane-product-price">
-                                    ₱<?= number_format(
-                                        $product['price'],
-                                        2
-                                    ) ?>
-                                </span>
-                                <?php if (
-                                    $product['original_price'] !== null &&
-                                    $product['original_price'] > $product['price']
-                                ): ?>
-                                    <span class="diane-old-price">
-                                        ₱<?= number_format(
-                                            $product['original_price'],
-                                            2
-                                        ) ?>
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-                            <!-- ADD TO BAG -->
-                            <?php if (
-                                $isCustomerLoggedIn &&
-                                !empty($product['sizes']) &&
-                                $product['stock'] > 0
-                            ): ?>
-                                <form
-                                    class="diane-card-cart"
-                                    method="POST"
-                                    action="add_to_cart.php"
-                                >
-                                    <input
-                                        type="hidden"
-                                        name="csrf_token"
-                                        value="<?= htmlspecialchars(
-                                            $customerCsrf,
-                                            ENT_QUOTES,
-                                            'UTF-8'
-                                        ) ?>"
-                                    >
-                                    <input
-                                        type="hidden"
-                                        name="product_id"
-                                        value="<?= htmlspecialchars(
-                                            $product['id'],
-                                            ENT_QUOTES,
-                                            'UTF-8'
-                                        ) ?>"
-                                    >
-                                    <input
-                                        type="hidden"
-                                        name="quantity"
-                                        value="1"
-                                    >
-                                    <select
-                                        class="diane-size-select"
-                                        name="size"
-                                        required
-                                        aria-label="Choose size for <?= htmlspecialchars(
-                                            $product['name'],
-                                            ENT_QUOTES,
-                                            'UTF-8'
-                                        ) ?>"
-                                    >
-                                        <option value="">
-                                            SELECT SIZE
-                                        </option>
-                                        <?php foreach (
-                                            $product['sizes'] as $size
-                                        ): ?>
-                                            <option value="<?= htmlspecialchars(
-                                                (string)$size,
-                                                ENT_QUOTES,
-                                                'UTF-8'
-                                            ) ?>">
-                                                <?= htmlspecialchars(
-                                                    (string)$size,
-                                                    ENT_QUOTES,
-                                                    'UTF-8'
-                                                ) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <button
-                                        type="submit"
-                                        class="diane-add-button"
-                                    >
-                                        ADD TO BAG
-                                    </button>
-                                </form>
-                            <?php elseif (!$isCustomerLoggedIn): ?>
-                                <a
-                                    class="diane-card-signin"
-                                    href="login.php"
-                                >
-                                    SIGN IN TO ADD TO BAG
-                                </a>
-                            <?php else: ?>
-                                <button
-                                    type="button"
-                                    class="diane-add-button"
-                                    disabled
-                                >
-                                    OUT OF STOCK
-                                </button>
-                            <?php endif; ?>
-                            <!-- DETAILS AND TRY-ON -->
-                            <div class="diane-card-links">
-                                <a
-                                    href="product.php?id=<?= rawurlencode(
-                                        $product['id']
-                                    ) ?>"
-                                >
-                                    VIEW DETAILS
-                                </a>
-                                <button
-                                    type="button"
-                                    class="try-button"
-                                    data-product-id="<?= htmlspecialchars(
-                                        $product['id'],
-                                        ENT_QUOTES,
-                                        'UTF-8'
-                                    ) ?>"
-                                    onclick="openTryOn(this)"
-                                >
-                                    TRY ON
-                                </button>
-                            </div>
-                        </div>
-                    </article>
-                <?php endforeach; ?>
-            <?php endif; ?>
+            <?php dianeRenderHomepageProducts($featuredProducts); ?>
         </div>
     </section>
+
+    <?php if (!empty($saleProducts)): ?>
+        <section class="diane-collection diane-home-highlights">
+            <div class="diane-section-top">
+                <div>
+                    <p class="diane-section-label">SPECIAL PRICES, LIMITED TIME</p>
+                    <h2 class="diane-section-title">Sale &amp; Offers</h2>
+                </div>
+                <a class="diane-search-clear" href="collection.php">SHOP ALL</a>
+            </div>
+            <div class="diane-product-grid">
+                <?php dianeRenderHomepageProducts($saleProducts); ?>
+            </div>
+        </section>
+    <?php endif; ?>
+
+    <?php if (!empty($newArrivalProducts)): ?>
+        <section class="diane-collection diane-home-highlights">
+            <div class="diane-section-top">
+                <div>
+                    <p class="diane-section-label">JUST ARRIVED</p>
+                    <h2 class="diane-section-title">New Arrivals</h2>
+                </div>
+                <a class="diane-search-clear" href="collection.php">DISCOVER MORE</a>
+            </div>
+            <div class="diane-product-grid">
+                <?php dianeRenderHomepageProducts($newArrivalProducts); ?>
+            </div>
+        </section>
+    <?php endif; ?>
+
     <!-- =========================================
          EDITORIAL BANNER
     ========================================= -->
@@ -1941,7 +2202,7 @@ $heroSlides = array_slice($heroSlides, 0, 5);
             </p>
             <a
                 class="diane-editorial-button"
-                href="#collection"
+                href="collection.php"
             >
                 SHOP THE COLLECTION
             </a>
@@ -2219,7 +2480,7 @@ $heroSlides = array_slice($heroSlides, 0, 5);
         </a>
         <div class="diane-footer-links">
             <a href="index.php">HOME</a>
-            <a href="index.php#collection">COLLECTION</a>
+            <a href="collection.php">COLLECTION</a>
             <a href="index.php#try-on">VIRTUAL TRY-ON</a>
             <?php if ($isCustomerLoggedIn): ?>
                 <a href="cart.php">MY BAG</a>

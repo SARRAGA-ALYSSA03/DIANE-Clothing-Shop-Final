@@ -1480,7 +1480,7 @@ foreach ($cartItems as $item) {
 
             <a href="index.php">HOME</a>
 
-            <a href="index.php#collection">COLLECTION</a>
+            <a href="collection.php">COLLECTION</a>
 
             <a href="index.php#try-on">VIRTUAL TRY-ON</a>
 
@@ -1635,7 +1635,7 @@ foreach ($cartItems as $item) {
 
             <a
                 class="cart-empty-button"
-                href="index.php#collection"
+                href="collection.php"
             >
                 EXPLORE COLLECTION
             </a>
@@ -1978,7 +1978,7 @@ foreach ($cartItems as $item) {
 
                 <a
                     class="cart-continue-link"
-                    href="index.php#collection"
+                    href="collection.php"
                 >
                     CONTINUE SHOPPING
                 </a>
@@ -2014,7 +2014,7 @@ foreach ($cartItems as $item) {
 
             <a href="index.php">HOME</a>
 
-            <a href="index.php#collection">COLLECTION</a>
+            <a href="collection.php">COLLECTION</a>
 
             <a href="index.php#try-on">VIRTUAL TRY-ON</a>
 

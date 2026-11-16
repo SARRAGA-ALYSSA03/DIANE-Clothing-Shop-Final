@@ -1432,7 +1432,7 @@ if ($orderLoadError === '') {
 
             <a href="index.php">HOME</a>
 
-            <a href="index.php#collection">COLLECTION</a>
+            <a href="collection.php">COLLECTION</a>
 
             <a href="index.php#try-on">VIRTUAL TRY-ON</a>
 
@@ -1543,7 +1543,7 @@ if ($orderLoadError === '') {
             </p>
 
             <a
-                href="index.php#collection"
+                href="collection.php"
                 class="shop-button"
             >
                 EXPLORE COLLECTION
@@ -2103,7 +2103,7 @@ if ($orderLoadError === '') {
 
             <a href="index.php">HOME</a>
 
-            <a href="index.php#collection">COLLECTION</a>
+            <a href="collection.php">COLLECTION</a>
 
             <a href="index.php#try-on">VIRTUAL TRY-ON</a>
 

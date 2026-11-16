@@ -2034,7 +2034,7 @@ foreach ($cartItems as $item) {
 
             <a href="index.php">HOME</a>
 
-            <a href="index.php#collection">COLLECTION</a>
+            <a href="collection.php">COLLECTION</a>
 
             <a href="index.php#try-on">VIRTUAL TRY-ON</a>
 
@@ -2254,7 +2254,7 @@ foreach ($cartItems as $item) {
 
             <a
 
-                href="index.php#collection"
+                href="collection.php"
 
                 class="confirmation-button"
 
@@ -2312,7 +2312,7 @@ foreach ($cartItems as $item) {
 
             <a
 
-                href="index.php#collection"
+                href="collection.php"
 
                 class="confirmation-button"
 
@@ -2961,7 +2961,7 @@ foreach ($cartItems as $item) {
 
             <a href="index.php">HOME</a>
 
-            <a href="index.php#collection">COLLECTION</a>
+            <a href="collection.php">COLLECTION</a>
 
             <a href="index.php#try-on">VIRTUAL TRY-ON</a>
 

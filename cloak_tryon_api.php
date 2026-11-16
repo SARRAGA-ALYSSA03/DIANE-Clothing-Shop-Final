@@ -205,7 +205,7 @@ if (!class_exists('finfo')) {
 $cloakBase = rtrim(
     getenv('CLOAK_API_URL')
         ? getenv('CLOAK_API_URL')
-        : 'https://a0d03ca73f8a654783.gradio.live',
+        : 'https://5ad64c587e9c42b2c3.gradio.live',
     '/'
 );
 
