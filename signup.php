@@ -14,8 +14,11 @@ $email = '';
 $message = '';
 $messageType = '';
 
-if (($_GET['success'] ?? '') === '1') {
-    $message = 'Registration successful! Check your email for a confirmation message if email confirmation is enabled, then sign in.';
+if (($_GET['verified'] ?? '') === '1') {
+    $message = 'Email verified successfully! You can now sign in to your DIANE account.';
+    $messageType = 'success';
+} elseif (($_GET['success'] ?? '') === '1') {
+    $message = 'Registration successful! Please check your email and click the confirmation link to activate your account.';
     $messageType = 'success';
 }
 
@@ -56,8 +59,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = 'Your passwords do not match.';
         $messageType = 'error';
     } else {
+        // Redirect confirmation emails to the current PHP signup page,
+        // rather than the old React/Vite localhost:3000 address.
+        $confirmationRedirect = 'http://localhost/diane-clothing-shop/signup.php';
+        $signupEndpoint = '/auth/v1/signup?redirect_to=' . rawurlencode($confirmationRedirect);
+
         $signupResult = supabaseRequest(
-            '/auth/v1/signup',
+            $signupEndpoint,
             'POST',
             [
                 'email' => $email,
@@ -348,6 +356,16 @@ document.querySelectorAll('.password-toggle').forEach(function (button) {
         this.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
     });
 });
+
+// Supabase returns the confirmation result in the URL fragment,
+// which PHP cannot read directly. Convert a successful confirmation
+// into a normal query parameter so the page can show its success message.
+(function handleEmailVerificationReturn() {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    if (params.get('type') === 'signup' && params.get('access_token')) {
+        window.location.replace(window.location.pathname + '?verified=1');
+    }
+})();
 
 const signupForm = document.getElementById('signup-form');
 const passwordInput = document.getElementById('password');
