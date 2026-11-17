@@ -205,7 +205,7 @@ if (!class_exists('finfo')) {
 $cloakBase = rtrim(
     getenv('CLOAK_API_URL')
         ? getenv('CLOAK_API_URL')
-        : 'https://5ad64c587e9c42b2c3.gradio.live',
+        : 'https://bb74b0a5cfebfb152a.gradio.live',
     '/'
 );
 
@@ -240,7 +240,7 @@ try {
         $bottom,
         $dress,
         'Balanced',
-        0,
+        42,
         'All'
     );
 

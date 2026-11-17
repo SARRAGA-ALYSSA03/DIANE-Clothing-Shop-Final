@@ -2644,19 +2644,29 @@ function dianeRenderHomepageProducts(array $items): void
 
     if (!aiSelect || !photoInput || !generateButton || !status) return;
 
-    function syncProductSelect() {
-        if (originalSelect && aiSelect.options.length) {
-            const match = Array.from(aiSelect.options).find(o => o.value === originalSelect.value);
-            if (match) aiSelect.value = match.value;
-        }
+    function updateSelectedProductLabel() {
         const option = aiSelect.selectedOptions[0];
         selectedProduct.textContent = option
             ? 'Selected: ' + option.textContent.trim()
             : 'No product is available.';
     }
-    if (originalSelect) originalSelect.addEventListener('change', syncProductSelect);
-    aiSelect.addEventListener('change', syncProductSelect);
-    syncProductSelect();
+
+    // When the Manual Try-On product changes, mirror it into AI Try-On.
+    function syncAiSelectFromManual() {
+        if (originalSelect && aiSelect.options.length) {
+            const match = Array.from(aiSelect.options).find(o => o.value === originalSelect.value);
+            if (match) aiSelect.value = match.value;
+        }
+        updateSelectedProductLabel();
+    }
+
+    if (originalSelect) {
+        originalSelect.addEventListener('change', syncAiSelectFromManual);
+    }
+
+    // A change made directly in the AI dropdown must stay selected.
+    aiSelect.addEventListener('change', updateSelectedProductLabel);
+    syncAiSelectFromManual();
 
     function garmentType(category) {
         const value = String(category || '').toLowerCase().trim();
@@ -2717,11 +2727,38 @@ function dianeRenderHomepageProducts(array $items): void
             const response = await fetch('cloak_tryon_api.php', {
                 method: 'POST',
                 body: formData,
-                credentials: 'same-origin'
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json'
+                }
             });
-            const payload = await response.json();
+
+            // Read as text first so an HTML/PHP/Cloudflare error page
+            // does not get hidden behind a generic JSON parsing error.
+            const responseText = await response.text();
+            let payload = null;
+
+            try {
+                payload = JSON.parse(responseText);
+            } catch (parseError) {
+                const preview = responseText
+                    .replace(/\\s+/g, ' ')
+                    .trim()
+                    .slice(0, 260);
+
+                throw new Error(
+                    'AI Try-On server returned a non-JSON response (HTTP ' +
+                    response.status + '). ' +
+                    (preview || 'The response was empty.') +
+                    ' Check cloak_tryon_api.php / Cloudflare.'
+                );
+            }
+
             if (!response.ok || !payload.success || !payload.result_url) {
-                throw new Error(payload.error || 'AI Try-On could not be completed.');
+                throw new Error(
+                    payload.error ||
+                    ('AI Try-On request failed (HTTP ' + response.status + ').')
+                );
             }
 
             resultImage.src = payload.result_url;
